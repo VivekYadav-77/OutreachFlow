@@ -829,6 +829,7 @@ th {
   box-shadow: 0 1px 2px var(--shadow-color);
   width: 100%;
   text-align: left;
+  overflow: hidden; /* Prevent text content from expanding card */
 }
 
 .template-card:hover {
@@ -851,6 +852,7 @@ th {
   justify-content: space-between;
   align-items: center;
   gap: 8px;
+  width: 100%;
 }
 
 .template-card-title {
@@ -861,6 +863,7 @@ th {
   text-overflow: ellipsis;
   white-space: nowrap;
   flex: 1;
+  min-width: 0; /* Essential for ellipsis in flexbox containers */
 }
 
 .template-card-subject {
@@ -870,6 +873,7 @@ th {
   text-overflow: ellipsis;
   white-space: nowrap;
   display: block;
+  width: 100%;
 }
 
 .template-card-footer {
@@ -878,12 +882,14 @@ th {
   align-items: center;
   margin-top: 4px;
   min-height: 24px;
+  width: 100%;
 }
 
 .template-card-actions {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-shrink: 0; /* Keep action buttons at their full size */
 }
 
 .card-action-btn {

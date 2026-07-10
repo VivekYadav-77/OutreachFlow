@@ -489,15 +489,28 @@ function Recruiters() {
   const { data: templates } = useApi<Template[]>("/api/templates", refresh);
   const defaultTemplate = templates?.find((template) => template.isDefault) ?? templates?.[0];
   const [form, setForm] = React.useState({ fullName: "", company: "", email: "", designation: "", notes: "", templateId: "" });
+  
+  React.useEffect(() => {
+    if (form.templateId && templates && !templates.some((t) => String(t.id) === form.templateId)) {
+      setForm((current) => ({ ...current, templateId: "" }));
+    }
+  }, [templates, form.templateId]);
+
   React.useEffect(() => {
     if (!form.templateId && defaultTemplate) setForm((current) => ({ ...current, templateId: String(defaultTemplate.id) }));
   }, [defaultTemplate, form.templateId]);
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    await api("/api/recruiters", { method: "POST", body: JSON.stringify({ ...form, templateId: form.templateId ? Number(form.templateId) : undefined }) });
+    if (!form.templateId) {
+      alert("Please select a template first.");
+      return;
+    }
+    await api("/api/recruiters", { method: "POST", body: JSON.stringify({ ...form, templateId: Number(form.templateId) }) });
     setForm({ fullName: "", company: "", email: "", designation: "", notes: "", templateId: defaultTemplate ? String(defaultTemplate.id) : "" });
     setRefresh((value) => value + 1);
   };
+
   const importCsv = async (file?: File) => {
     if (!file) return;
     const body = new FormData();
@@ -505,6 +518,9 @@ function Recruiters() {
     await api("/api/recruiters/import", { method: "POST", body });
     setRefresh((value) => value + 1);
   };
+
+  const hasTemplates = templates && templates.length > 0;
+
   return (
     <Page title="Recruiters" actions={<a className="button secondary" href={`${API_URL}/api/recruiters/export`}>Export CSV</a>}>
       <section className="panel">
@@ -515,22 +531,39 @@ function Recruiters() {
             <input hidden type="file" accept=".csv,text/csv" onChange={(event) => importCsv(event.target.files?.[0])} />
           </label>
         </div>
+        
+        {!hasTemplates && (
+          <div className="warning-box" style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "16px", marginBottom: "8px" }}>
+            <AlertTriangle size={18} />
+            <span>
+              <strong>No templates available.</strong> Please create an email template on the <NavLink to="/compose" style={{ color: "var(--primary)", textDecoration: "underline", fontWeight: "bold" }}>Template Builder</NavLink> page before adding recruiters.
+            </span>
+          </div>
+        )}
+
         <form className="form-grid" onSubmit={submit}>
-          <input required placeholder="Full name" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
-          <input required placeholder="Company" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
-          <input required type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-          <input placeholder="Designation" value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} />
-          <select value={form.templateId} onChange={(e) => setForm({ ...form, templateId: e.target.value })}>
+          <input disabled={!hasTemplates} required placeholder="Full name" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
+          <input disabled={!hasTemplates} required placeholder="Company" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
+          <input disabled={!hasTemplates} required type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          <input disabled={!hasTemplates} placeholder="Designation" value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} />
+          <select disabled={!hasTemplates} required value={form.templateId} onChange={(e) => setForm({ ...form, templateId: e.target.value })}>
+            <option value="">Select a template...</option>
             {(templates ?? []).map((template) => (
               <option key={template.id} value={template.id}>{template.name}{template.isDefault ? " (Default)" : ""}</option>
             ))}
           </select>
-          <button>Add Recruiter</button>
+          <button disabled={!hasTemplates}>Add Recruiter</button>
         </form>
       </section>
       <DataTable
         headers={["Name", "Company", "Email", "Template", "Status"]}
-        rows={(data?.rows ?? []).map((row) => [row.fullName, row.company, row.email, templates?.find((template) => template.id === row.templateId)?.name ?? defaultTemplate?.name ?? "Default", row.status])}
+        rows={(data?.rows ?? []).map((row) => [
+          row.fullName,
+          row.company,
+          row.email,
+          templates?.find((template) => template.id === row.templateId)?.name ?? (row.templateId ? "Deleted Template" : "No Template Attached"),
+          row.status
+        ])}
       />
     </Page>
   );

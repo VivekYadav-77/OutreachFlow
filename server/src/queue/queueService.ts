@@ -8,7 +8,7 @@ import { getDefaultTemplate, getTemplate, renderTemplate } from "../services/tem
 
 export async function enqueuePendingRecruiters() {
   const settings = await getSettings();
-  const defaultTemplate = await getDefaultTemplate();
+  const defaultTemplate = await getDefaultTemplate().catch(() => null);
   const pendingRecruiters = await db.select().from(recruiters).where(eq(recruiters.status, "Pending")).orderBy(asc(recruiters.createdAt));
   let created = 0;
   let skipped = 0;
@@ -24,7 +24,17 @@ export async function enqueuePendingRecruiters() {
     }
 
     const template = recruiter.templateId ? await getTemplate(recruiter.templateId).catch(() => defaultTemplate) : defaultTemplate;
-    if (!template) throw new ValidationError("No default template exists. Create a template before starting the queue.");
+    if (!template) {
+      await db.update(recruiters).set({ status: "Failed", updatedAt: new Date() }).where(eq(recruiters.id, recruiter.id));
+      await createLog({
+        level: "error",
+        event: "recruiter.failed",
+        message: `Skipped enqueuing recruiter ${recruiter.email}: No template associated and no default template exists`,
+        recruiterId: recruiter.id
+      });
+      skipped += 1;
+      continue;
+    }
     const rendered = renderTemplate(template, recruiter);
     const [draft] = await db
       .insert(emailDrafts)

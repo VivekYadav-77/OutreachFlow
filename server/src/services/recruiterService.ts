@@ -54,9 +54,11 @@ export async function getRecruiter(id: number) {
 
 export async function createRecruiter(input: z.infer<typeof recruiterSchema>) {
   const parsed = recruiterSchema.parse(input);
-  const templateId = parsed.templateId ?? (await getDefaultTemplate()).id;
-  await getTemplate(templateId);
-  const [created] = await db.insert(recruiters).values({ ...parsed, templateId }).returning();
+  if (!parsed.templateId) {
+    throw new ValidationError("Template selection is required to add a recruiter");
+  }
+  await getTemplate(parsed.templateId);
+  const [created] = await db.insert(recruiters).values({ ...parsed, templateId: parsed.templateId }).returning();
   await createLog({ event: "recruiter.created", message: `Recruiter created: ${created.email}`, recruiterId: created.id });
   return created;
 }
@@ -88,7 +90,7 @@ export async function importRecruitersFromCsv(csv: string) {
   });
 
   const required = ["fullName", "company", "email"];
-  const defaultTemplate = await getDefaultTemplate();
+  const defaultTemplate = await getDefaultTemplate().catch(() => null);
   const seen = new Set<string>();
   const summary = { imported: 0, duplicates: 0, invalid: 0, skipped: 0 };
 
@@ -104,7 +106,7 @@ export async function importRecruitersFromCsv(csv: string) {
       email: row.email,
       linkedin: row.linkedin || null,
       notes: row.notes || "",
-      templateId: defaultTemplate.id
+      templateId: defaultTemplate ? defaultTemplate.id : null
     });
     if (!parsed.success) {
       summary.invalid += 1;
@@ -116,7 +118,7 @@ export async function importRecruitersFromCsv(csv: string) {
     }
     seen.add(parsed.data.email);
     try {
-      await db.insert(recruiters).values({ ...parsed.data, templateId: defaultTemplate.id });
+      await db.insert(recruiters).values({ ...parsed.data, templateId: defaultTemplate ? defaultTemplate.id : null });
       summary.imported += 1;
     } catch {
       summary.duplicates += 1;
