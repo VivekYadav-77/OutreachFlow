@@ -1,12 +1,13 @@
 import { format } from "@fast-csv/format";
 import { parseString } from "@fast-csv/parse";
-import { and, asc, count, desc, eq, ilike, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, or, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../database/db.js";
-import { recruiters } from "../database/schema.js";
+import { recruiters, emailQueue, emailDrafts } from "../database/schema.js";
 import { NotFoundError, ValidationError } from "../utils/errors.js";
 import { createLog } from "./logService.js";
-import { getDefaultTemplate, getTemplate } from "./templateService.js";
+import { getDefaultTemplate, getTemplate, renderTemplate } from "./templateService.js";
+import { getSettings } from "./settingsService.js";
 
 export const recruiterSchema = z.object({
   fullName: z.string().min(1),
@@ -65,16 +66,98 @@ export async function createRecruiter(input: z.infer<typeof recruiterSchema>) {
 
 export async function updateRecruiter(id: number, input: Partial<z.infer<typeof recruiterSchema>>) {
   await getRecruiter(id);
+  const settings = await getSettings();
+
+  // If worker is running, block editing if the recruiter has any active queue jobs
+  if (settings.workerStatus === "running") {
+    const activeJobs = await db
+      .select()
+      .from(emailQueue)
+      .where(
+        and(
+          eq(emailQueue.recruiterId, id),
+          inArray(emailQueue.state, ["Pending", "Sending", "Retrying"])
+        )
+      );
+    if (activeJobs.length > 0) {
+      throw new ValidationError("Cannot edit recruiter info while the worker is actively running and this recruiter has an active job in the queue. Please pause or stop the worker first.");
+    }
+  }
+
   const parsed = recruiterSchema.partial().parse(input);
   if (parsed.templateId) await getTemplate(parsed.templateId);
   const [updated] = await db.update(recruiters).set({ ...parsed, updatedAt: new Date() }).where(eq(recruiters.id, id)).returning();
+
+  // Re-generate and synchronize drafts for any non-sent queue jobs associated with this recruiter
+  const nonSentJobs = await db
+    .select()
+    .from(emailQueue)
+    .where(
+      and(
+        eq(emailQueue.recruiterId, id),
+        ne(emailQueue.state, "Sent")
+      )
+    );
+
+  for (const job of nonSentJobs) {
+    if (job.draftId) {
+      const template = updated.templateId
+        ? await getTemplate(updated.templateId).catch(() => getDefaultTemplate())
+        : await getDefaultTemplate();
+
+      if (template) {
+        const rendered = renderTemplate(template, updated);
+        await db
+          .update(emailDrafts)
+          .set({
+            to: [updated.email],
+            subject: rendered.subject,
+            html: rendered.html,
+            text: rendered.text,
+            status: "Queued", // Reset status to Queued in case it failed
+            updatedAt: new Date()
+          })
+          .where(eq(emailDrafts.id, job.draftId));
+      }
+    }
+  }
+
   await createLog({ event: "recruiter.updated", message: `Recruiter updated: ${updated.email}`, recruiterId: id });
   return updated;
 }
 
 export async function deleteRecruiter(id: number) {
   await getRecruiter(id);
+  const settings = await getSettings();
+
+  // If worker is running, block deleting if the recruiter has any active queue jobs
+  if (settings.workerStatus === "running") {
+    const activeJobs = await db
+      .select()
+      .from(emailQueue)
+      .where(
+        and(
+          eq(emailQueue.recruiterId, id),
+          inArray(emailQueue.state, ["Pending", "Sending", "Retrying"])
+        )
+      );
+    if (activeJobs.length > 0) {
+      throw new ValidationError("Cannot delete recruiter while the worker is actively running and this recruiter has an active job in the queue. Please pause or stop the worker first.");
+    }
+  }
+
+  // Find all drafts associated with this recruiter's queue jobs to clean them up
+  const jobs = await db.select().from(emailQueue).where(eq(emailQueue.recruiterId, id));
+  const draftIds = jobs.map((job) => job.draftId).filter((dId): dId is number => dId !== null);
+
+  // Delete the recruiter (cascades to email_queue in the database)
   await db.delete(recruiters).where(eq(recruiters.id, id));
+
+  // Clean up orphaned email drafts
+  if (draftIds.length > 0) {
+    await db.delete(emailDrafts).where(inArray(emailDrafts.id, draftIds));
+  }
+
   await createLog({ event: "recruiter.deleted", message: "Recruiter deleted", recruiterId: id });
 }
 

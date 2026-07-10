@@ -10,7 +10,7 @@ import Highlight from "@tiptap/extension-highlight";
 import LinkExtension from "@tiptap/extension-link";
 import ImageExtension from "@tiptap/extension-image";
 import { TextStyle } from "@tiptap/extension-text-style";
-import { AlignCenter, AlignLeft, AlignRight, BarChart3, Bold, Check, ExternalLink, Highlighter, Image, Italic, LayoutDashboard, Link, List, ListChecks, ListOrdered, Mail, Monitor, Moon, Redo2, Save, Settings, Sun, Trash2, Underline, Undo2, Upload, X, XCircle, AlertTriangle } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, BarChart3, Bold, Check, ExternalLink, Highlighter, Image, Italic, LayoutDashboard, Link, List, ListChecks, ListOrdered, Mail, Monitor, Moon, Pencil, Redo2, Save, Settings, Sun, Trash2, Underline, Undo2, Upload, X, XCircle, AlertTriangle } from "lucide-react";
 import "./styles.css";
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
 
@@ -490,6 +490,11 @@ function Recruiters() {
   const defaultTemplate = templates?.find((template) => template.isDefault) ?? templates?.[0];
   const [form, setForm] = React.useState({ fullName: "", company: "", email: "", designation: "", notes: "", templateId: "" });
   
+  // State for Editing
+  const [editingRecruiter, setEditingRecruiter] = React.useState<Recruiter | null>(null);
+  const [editForm, setEditForm] = React.useState({ fullName: "", company: "", email: "", designation: "", templateId: "" });
+  const [editError, setEditError] = React.useState("");
+
   React.useEffect(() => {
     if (form.templateId && templates && !templates.some((t) => String(t.id) === form.templateId)) {
       setForm((current) => ({ ...current, templateId: "" }));
@@ -509,6 +514,46 @@ function Recruiters() {
     await api("/api/recruiters", { method: "POST", body: JSON.stringify({ ...form, templateId: Number(form.templateId) }) });
     setForm({ fullName: "", company: "", email: "", designation: "", notes: "", templateId: defaultTemplate ? String(defaultTemplate.id) : "" });
     setRefresh((value) => value + 1);
+  };
+
+  const startEdit = (recruiter: Recruiter) => {
+    setEditingRecruiter(recruiter);
+    setEditForm({
+      fullName: recruiter.fullName,
+      company: recruiter.company,
+      email: recruiter.email,
+      designation: recruiter.designation || "",
+      templateId: recruiter.templateId ? String(recruiter.templateId) : ""
+    });
+    setEditError("");
+  };
+
+  const handleUpdate = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editingRecruiter) return;
+    try {
+      await api(`/api/recruiters/${editingRecruiter.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          ...editForm,
+          templateId: editForm.templateId ? Number(editForm.templateId) : null
+        })
+      });
+      setEditingRecruiter(null);
+      setRefresh((value) => value + 1);
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "Failed to update recruiter");
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!window.confirm("Are you sure you want to delete this recruiter?")) return;
+    try {
+      await api(`/api/recruiters/${id}`, { method: "DELETE" });
+      setRefresh((value) => value + 1);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to delete recruiter");
+    }
   };
 
   const importCsv = async (file?: File) => {
@@ -555,16 +600,109 @@ function Recruiters() {
           <button disabled={!hasTemplates}>Add Recruiter</button>
         </form>
       </section>
-      <DataTable
-        headers={["Name", "Company", "Email", "Template", "Status"]}
-        rows={(data?.rows ?? []).map((row) => [
-          row.fullName,
-          row.company,
-          row.email,
-          templates?.find((template) => template.id === row.templateId)?.name ?? (row.templateId ? "Deleted Template" : "No Template Attached"),
-          row.status
-        ])}
-      />
+
+      <section className="panel">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Company</th>
+              <th>Email</th>
+              <th>Template</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(data?.rows ?? []).map((row) => (
+              <tr key={row.id}>
+                <td>{row.fullName}</td>
+                <td>{row.company}</td>
+                <td>{row.email}</td>
+                <td>
+                  {templates?.find((template) => template.id === row.templateId)?.name ?? (row.templateId ? "Deleted Template" : "No Template Attached")}
+                </td>
+                <td>
+                  <span className={`status-${row.status.toLowerCase()}`}>{row.status}</span>
+                </td>
+                <td>
+                  <div className="action-buttons-cell">
+                    <button
+                      type="button"
+                      className="action-btn"
+                      title="Edit Recruiter"
+                      onClick={() => startEdit(row)}
+                    >
+                      <Pencil size={14} />
+                    </button>
+                    <button
+                      type="button"
+                      className="action-btn danger"
+                      title="Delete Recruiter"
+                      onClick={() => handleDelete(row.id)}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {(!data?.rows || data.rows.length === 0) && (
+              <tr>
+                <td colSpan={6} style={{ textAlign: "center", color: "var(--text-muted)", padding: "20px" }}>
+                  No recruiters found.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </section>
+
+      {/* Edit Recruiter Modal */}
+      {editingRecruiter && (
+        <div className="modal-overlay" onClick={() => setEditingRecruiter(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+            <div className="modal-header">
+              <h2>Edit Recruiter</h2>
+              <button className="modal-close" onClick={() => setEditingRecruiter(null)}><X size={24} /></button>
+            </div>
+            <div className="modal-body">
+              {editError && <p className="error" style={{ marginBottom: "16px" }}>{editError}</p>}
+              <form className="stack" onSubmit={handleUpdate}>
+                <label>
+                  Full Name
+                  <input required value={editForm.fullName} onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })} />
+                </label>
+                <label>
+                  Company
+                  <input required value={editForm.company} onChange={(e) => setEditForm({ ...editForm, company: e.target.value })} />
+                </label>
+                <label>
+                  Email
+                  <input required type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
+                </label>
+                <label>
+                  Designation
+                  <input value={editForm.designation} onChange={(e) => setEditForm({ ...editForm, designation: e.target.value })} />
+                </label>
+                <label>
+                  Template
+                  <select required value={editForm.templateId} onChange={(e) => setEditForm({ ...editForm, templateId: e.target.value })}>
+                    <option value="">Select a template...</option>
+                    {(templates ?? []).map((template) => (
+                      <option key={template.id} value={template.id}>{template.name}{template.isDefault ? " (Default)" : ""}</option>
+                    ))}
+                  </select>
+                </label>
+                <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
+                  <button type="submit">Save Changes</button>
+                  <button type="button" className="secondary" onClick={() => setEditingRecruiter(null)}>Cancel</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </Page>
   );
 }

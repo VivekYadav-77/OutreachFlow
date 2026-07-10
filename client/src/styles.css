@@ -955,4 +955,34 @@ th {
   }
 }
 
+/* Recruiters Table Action Buttons */
+.action-buttons-cell {
+  display: flex;
+  gap: 8px;
+}
 
+.action-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+  min-height: auto;
+  width: 28px;
+  height: 28px;
+}
+
+.action-btn:hover {
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+.action-btn.danger:hover {
+  background: var(--error-bg);
+  color: var(--error-text);
+}
