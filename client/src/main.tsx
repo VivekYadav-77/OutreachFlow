@@ -685,6 +685,33 @@ function Compose() {
     setRefresh((value) => value + 1);
   };
 
+  const setDefaultFromList = async (id: number, event: React.MouseEvent) => {
+    event.stopPropagation();
+    try {
+      await api(`/api/templates/${id}/default`, { method: "POST" });
+      if (templateId === id) {
+        setStatus("Default template");
+      }
+      setRefresh((value) => value + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to set default template");
+    }
+  };
+
+  const deleteFromList = async (id: number, event: React.MouseEvent) => {
+    event.stopPropagation();
+    if (!window.confirm("Delete this template?")) return;
+    try {
+      await api(`/api/templates/${id}`, { method: "DELETE" });
+      if (templateId === id) {
+        newTemplate();
+      }
+      setRefresh((value) => value + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete template");
+    }
+  };
+
   return (
     <Page title="Template Builder" actions={<GoogleAuthStatus />}>
       {error && <p className="error">{error}</p>}
@@ -714,11 +741,45 @@ function Compose() {
           <h2>Templates</h2>
           <div className="draft-list">
             {(templates ?? []).map((template) => (
-              <button key={template.id} className={`draft-row ${template.id === templateId ? "active" : ""}`} onClick={() => loadTemplate(template)}>
-                <strong>{template.name}</strong>
-                <span>{template.subjectTemplate}</span>
-                <small>{template.isDefault ? "Default" : `Updated ${new Date(template.updatedAt).toLocaleString()}`}</small>
-              </button>
+              <div
+                key={template.id}
+                className={`template-card ${template.id === templateId ? "active" : ""} ${template.isDefault ? "is-default" : ""}`}
+                onClick={() => loadTemplate(template)}
+              >
+                <div className="template-card-header">
+                  <strong className="template-card-title">{template.name}</strong>
+                  <div className="template-card-actions">
+                    {!template.isDefault && (
+                      <button
+                        type="button"
+                        className="card-action-btn set-default-btn"
+                        title="Set as Default"
+                        onClick={(e) => setDefaultFromList(template.id, e)}
+                      >
+                        Set Default
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="card-action-btn delete-btn danger"
+                      title="Delete Template"
+                      onClick={(e) => deleteFromList(template.id, e)}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+                <span className="template-card-subject">{template.subjectTemplate}</span>
+                <div className="template-card-footer">
+                  {template.isDefault ? (
+                    <span className="default-badge">Default</span>
+                  ) : (
+                    <span className="update-time">
+                      Updated {new Date(template.updatedAt).toLocaleDateString()}
+                    </span>
+                  )}
+                </div>
+              </div>
             ))}
             {(!templates || templates.length === 0) && <p className="note-text">No templates yet. Create one to start sending.</p>}
           </div>

@@ -815,32 +815,132 @@ th {
   gap: 8px;
 }
 
-.draft-row {
-  align-items: stretch;
-  background: transparent;
-  border: 1px solid var(--border-lighter);
-  color: var(--text-main);
-  display: grid;
-  gap: 4px;
-  justify-content: stretch;
-  min-height: auto;
-  padding: 10px;
-  text-align: left;
+.template-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px var(--shadow-color);
   width: 100%;
+  text-align: left;
 }
 
-.draft-row:hover,
-.draft-row.active {
+.template-card:hover {
+  border-color: var(--primary);
+  box-shadow: 0 4px 12px var(--shadow-primary);
+  transform: translateY(-1px);
+}
+
+.template-card.active {
+  border-color: var(--primary);
   background: var(--primary-light);
-  color: var(--text-main);
 }
 
-.draft-row span,
-.draft-row small {
-  color: var(--text-muted);
+.template-card.is-default {
+  border-left: 4px solid var(--safe-text);
+}
+
+.template-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.template-card-title {
+  font-weight: 700;
+  color: var(--text-main);
+  font-size: 14px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+}
+
+.template-card-subject {
+  color: var(--text-muted);
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
+.template-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+  min-height: 24px;
+}
+
+.template-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.card-action-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 4px;
+  min-height: auto;
+  transition: all 0.2s ease;
+}
+
+.card-action-btn:hover {
+  background: var(--border-light);
+  color: var(--text-main);
+}
+
+.card-action-btn.delete-btn:hover {
+  background: var(--error-bg);
+  color: var(--error-text);
+}
+
+.card-action-btn.set-default-btn {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  gap: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+
+.card-action-btn.set-default-btn:hover {
+  background: var(--primary-light);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+.default-badge {
+  background-color: var(--safe-bg);
+  color: var(--safe-text);
+  border: 1px solid var(--success-border);
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+}
+
+.update-time {
+  color: var(--note-text-light);
+  font-size: 11px;
 }
 
 @media (max-width: 1100px) {
