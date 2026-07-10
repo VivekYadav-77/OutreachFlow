@@ -22,6 +22,13 @@
       "when": 1783627200000,
       "tag": "0002_gmail_composer",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1783710000000,
+      "tag": "0003_template_outreach",
+      "breakpoints": true
     }
   ]
 }

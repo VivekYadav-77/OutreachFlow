@@ -19,6 +19,17 @@ export const campaignRecipientStatus = pgEnum("campaign_recipient_status", ["Pen
 export const failureType = pgEnum("failure_type", ["Temporary", "Permanent"]);
 export const emailDraftStatus = pgEnum("email_draft_status", ["Draft", "Queued", "Sending", "Sent", "Failed"]);
 
+export const emailTemplates = pgTable("email_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  subjectTemplate: text("subject_template").notNull(),
+  htmlTemplate: text("html_template").notNull(),
+  textTemplate: text("text_template").notNull(),
+  isDefault: boolean("is_default").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+});
+
 export const recruiters = pgTable(
   "recruiters",
   {
@@ -30,6 +41,7 @@ export const recruiters = pgTable(
     linkedin: text("linkedin"),
     notes: text("notes").notNull().default(""),
     status: recruiterStatus("status").notNull().default("Pending"),
+    templateId: integer("template_id").references(() => emailTemplates.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
   },
@@ -209,6 +221,8 @@ export const campaignDailyStats = pgTable(
 
 export type Recruiter = typeof recruiters.$inferSelect;
 export type NewRecruiter = typeof recruiters.$inferInsert;
+export type EmailTemplate = typeof emailTemplates.$inferSelect;
+export type NewEmailTemplate = typeof emailTemplates.$inferInsert;
 export type EmailQueueJob = typeof emailQueue.$inferSelect;
 export type EmailDraft = typeof emailDrafts.$inferSelect;
 export type AppSettings = typeof settings.$inferSelect;

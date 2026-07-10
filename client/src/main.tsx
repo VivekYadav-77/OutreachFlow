@@ -10,7 +10,7 @@ import Highlight from "@tiptap/extension-highlight";
 import LinkExtension from "@tiptap/extension-link";
 import ImageExtension from "@tiptap/extension-image";
 import { TextStyle } from "@tiptap/extension-text-style";
-import { AlignCenter, AlignLeft, AlignRight, BarChart3, Bold, Check, ExternalLink, Highlighter, Image, Italic, LayoutDashboard, Link, List, ListChecks, ListOrdered, Mail, Monitor, Moon, Paperclip, Redo2, Save, Send, Settings, Sun, Trash2, Underline, Undo2, Upload, X, XCircle, AlertTriangle } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, BarChart3, Bold, Check, ExternalLink, Highlighter, Image, Italic, LayoutDashboard, Link, List, ListChecks, ListOrdered, Mail, Monitor, Moon, Redo2, Save, Settings, Sun, Trash2, Underline, Undo2, Upload, X, XCircle, AlertTriangle } from "lucide-react";
 import "./styles.css";
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
 
@@ -167,7 +167,7 @@ function Shell() {
   const nav = [
     { to: "/", label: "Dashboard", icon: LayoutDashboard },
     { to: "/recruiters", label: "Recruiters", icon: Mail },
-    { to: "/compose", label: "Compose", icon: Mail },
+    { to: "/compose", label: "Templates", icon: Mail },
     { to: "/settings", label: "Settings", icon: Settings },
     { to: "/logs", label: "Logs", icon: ListChecks },
     { to: "/statistics", label: "Statistics", icon: BarChart3 }
@@ -469,17 +469,33 @@ type Recruiter = {
   designation?: string;
   email: string;
   status: string;
+  templateId?: number | null;
+};
+
+type Template = {
+  id: number;
+  name: string;
+  subjectTemplate: string;
+  htmlTemplate: string;
+  textTemplate: string;
+  isDefault: boolean;
+  updatedAt: string;
 };
 
 function Recruiters() {
   const [refresh, setRefresh] = React.useState(0);
   const [search, setSearch] = React.useState("");
   const { data } = useApi<{ rows: Recruiter[]; total: number }>(`/api/recruiters?search=${encodeURIComponent(search)}`, refresh);
-  const [form, setForm] = React.useState({ fullName: "", company: "", email: "", designation: "", notes: "" });
+  const { data: templates } = useApi<Template[]>("/api/templates", refresh);
+  const defaultTemplate = templates?.find((template) => template.isDefault) ?? templates?.[0];
+  const [form, setForm] = React.useState({ fullName: "", company: "", email: "", designation: "", notes: "", templateId: "" });
+  React.useEffect(() => {
+    if (!form.templateId && defaultTemplate) setForm((current) => ({ ...current, templateId: String(defaultTemplate.id) }));
+  }, [defaultTemplate, form.templateId]);
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    await api("/api/recruiters", { method: "POST", body: JSON.stringify(form) });
-    setForm({ fullName: "", company: "", email: "", designation: "", notes: "" });
+    await api("/api/recruiters", { method: "POST", body: JSON.stringify({ ...form, templateId: form.templateId ? Number(form.templateId) : undefined }) });
+    setForm({ fullName: "", company: "", email: "", designation: "", notes: "", templateId: defaultTemplate ? String(defaultTemplate.id) : "" });
     setRefresh((value) => value + 1);
   };
   const importCsv = async (file?: File) => {
@@ -504,76 +520,26 @@ function Recruiters() {
           <input required placeholder="Company" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
           <input required type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           <input placeholder="Designation" value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} />
+          <select value={form.templateId} onChange={(e) => setForm({ ...form, templateId: e.target.value })}>
+            {(templates ?? []).map((template) => (
+              <option key={template.id} value={template.id}>{template.name}{template.isDefault ? " (Default)" : ""}</option>
+            ))}
+          </select>
           <button>Add Recruiter</button>
         </form>
       </section>
       <DataTable
-        headers={["Name", "Company", "Email", "Status"]}
-        rows={(data?.rows ?? []).map((row) => [row.fullName, row.company, row.email, row.status])}
+        headers={["Name", "Company", "Email", "Template", "Status"]}
+        rows={(data?.rows ?? []).map((row) => [row.fullName, row.company, row.email, templates?.find((template) => template.id === row.templateId)?.name ?? defaultTemplate?.name ?? "Default", row.status])}
       />
     </Page>
   );
 }
 
-type DraftAttachment = {
-  id: number;
-  originalName: string;
-  mimeType: string;
-  size: number;
-};
-
-type EmailDraft = {
-  id: number;
-  to: string[];
-  cc: string[];
-  bcc: string[];
-  subject: string;
-  html: string;
-  text: string;
-  status: "Draft" | "Queued" | "Sending" | "Sent" | "Failed";
-  lastError?: string | null;
-  updatedAt: string;
-  attachments?: DraftAttachment[];
-};
-
 function emailTextFromHtml(html: string) {
   const element = document.createElement("div");
   element.innerHTML = html;
   return element.textContent?.replace(/\s+/g, " ").trim() ?? "";
-}
-
-function RecipientField({ label, values, onChange }: { label: string; values: string[]; onChange: (values: string[]) => void }) {
-  const [input, setInput] = React.useState("");
-  const addValue = (value: string) => {
-    const parts = value.split(/[,\s;]+/).map((part) => part.trim().toLowerCase()).filter(Boolean);
-    if (parts.length === 0) return;
-    onChange([...values, ...parts.filter((part) => !values.includes(part))]);
-    setInput("");
-  };
-  return (
-    <div className="recipient-row">
-      <span>{label}</span>
-      <div className="recipient-input">
-        {values.map((value) => (
-          <button key={value} type="button" className="recipient-chip" onClick={() => onChange(values.filter((item) => item !== value))}>
-            {value}<X size={13} />
-          </button>
-        ))}
-        <input
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
-          onBlur={() => addValue(input)}
-          onKeyDown={(event) => {
-            if (["Enter", ",", "Tab"].includes(event.key)) {
-              event.preventDefault();
-              addValue(input);
-            }
-            if (event.key === "Backspace" && !input && values.length > 0) onChange(values.slice(0, -1));
-          }}
-        />
-      </div>
-    </div>
-  );
 }
 
 function ComposerToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
@@ -606,18 +572,13 @@ function ComposerToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
 
 function Compose() {
   const [refresh, setRefresh] = React.useState(0);
-  const { data: drafts } = useApi<EmailDraft[]>("/api/drafts", refresh);
-  const [draftId, setDraftId] = React.useState<number | null>(null);
-  const [to, setTo] = React.useState<string[]>([]);
-  const [cc, setCc] = React.useState<string[]>([]);
-  const [bcc, setBcc] = React.useState<string[]>([]);
+  const { data: templates } = useApi<Template[]>("/api/templates", refresh);
+  const [templateId, setTemplateId] = React.useState<number | null>(null);
+  const [name, setName] = React.useState("");
   const [subject, setSubject] = React.useState("");
-  const [attachments, setAttachments] = React.useState<DraftAttachment[]>([]);
   const [status, setStatus] = React.useState("Not saved");
   const [error, setError] = React.useState("");
   const [saving, setSaving] = React.useState(false);
-  const [queueing, setQueueing] = React.useState(false);
-  const [dragging, setDragging] = React.useState(false);
   const [bodyVersion, setBodyVersion] = React.useState(0);
   const dirty = React.useRef(false);
 
@@ -641,161 +602,125 @@ function Compose() {
     }
   });
 
+  React.useEffect(() => {
+    if (!templateId && templates && templates.length > 0) {
+      const selected = templates.find((template) => template.isDefault) ?? templates[0];
+      setTemplateId(selected.id);
+      setName(selected.name);
+      setSubject(selected.subjectTemplate);
+      editor?.commands.setContent(selected.htmlTemplate || "");
+      setStatus(selected.isDefault ? "Default template" : "Loaded");
+      dirty.current = false;
+    }
+  }, [editor, templateId, templates]);
+
   const payload = React.useCallback(() => {
     const html = editor?.getHTML() ?? "";
-    return { to, cc, bcc, subject, html, text: emailTextFromHtml(html), attachmentIds: attachments.map((item) => item.id) };
-  }, [attachments, bcc, cc, editor, subject, to]);
+    return { name, subjectTemplate: subject, htmlTemplate: html, textTemplate: emailTextFromHtml(html) };
+  }, [editor, name, subject]);
 
-  const saveDraft = React.useCallback(async () => {
+  const loadTemplate = (template: Template) => {
+    setTemplateId(template.id);
+    setName(template.name);
+    setSubject(template.subjectTemplate);
+    editor?.commands.setContent(template.htmlTemplate || "");
+    setError("");
+    setStatus(template.isDefault ? "Default template" : "Loaded");
+    dirty.current = false;
+  };
+
+  const newTemplate = () => {
+    setTemplateId(null);
+    setName("");
+    setSubject("");
+    editor?.commands.clearContent();
+    setStatus("New template");
+    setError("");
+    dirty.current = false;
+  };
+
+  const saveTemplate = React.useCallback(async () => {
     if (!editor || saving) return null;
     setSaving(true);
     setError("");
     setStatus("Saving...");
     try {
-      const saved = draftId
-        ? await api<EmailDraft>(`/api/drafts/${draftId}`, { method: "PUT", body: JSON.stringify(payload()) })
-        : await api<EmailDraft>("/api/drafts", { method: "POST", body: JSON.stringify(payload()) });
-      setDraftId(saved.id);
+      const saved = templateId
+        ? await api<Template>(`/api/templates/${templateId}`, { method: "PUT", body: JSON.stringify(payload()) })
+        : await api<Template>("/api/templates", { method: "POST", body: JSON.stringify(payload()) });
+      setTemplateId(saved.id);
+      setName(saved.name);
+      setSubject(saved.subjectTemplate);
       setStatus(`Saved ${new Date().toLocaleTimeString()}`);
       dirty.current = false;
       setRefresh((value) => value + 1);
       return saved.id;
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Draft save failed");
+      setError(err instanceof Error ? err.message : "Template save failed");
       setStatus("Save failed");
       return null;
     } finally {
       setSaving(false);
     }
-  }, [draftId, editor, payload, saving]);
+  }, [editor, payload, saving, templateId]);
 
   React.useEffect(() => {
     if (!dirty.current) return;
-    const timer = window.setTimeout(() => void saveDraft(), 1200);
+    const timer = window.setTimeout(() => void saveTemplate(), 1200);
     return () => window.clearTimeout(timer);
-  }, [to, cc, bcc, subject, attachments, bodyVersion, saveDraft]);
+  }, [name, subject, bodyVersion, saveTemplate]);
 
-  const loadDraft = async (id: number) => {
-    const draft = await api<EmailDraft>(`/api/drafts/${id}`);
-    setDraftId(draft.id);
-    setTo(draft.to);
-    setCc(draft.cc);
-    setBcc(draft.bcc);
-    setSubject(draft.subject);
-    setAttachments(draft.attachments ?? []);
-    editor?.commands.setContent(draft.html || "");
-    dirty.current = false;
-    setStatus(`Loaded ${draft.status}`);
-    setError("");
+  const setDefault = async () => {
+    const id = templateId ?? await saveTemplate();
+    if (!id) return;
+    await api(`/api/templates/${id}/default`, { method: "POST" });
+    setStatus("Default template");
+    setRefresh((value) => value + 1);
   };
 
-  const uploadFiles = async (files: FileList | File[]) => {
-    try {
-      for (const file of Array.from(files)) {
-        const body = new FormData();
-        body.append("file", file);
-        const uploaded = await api<DraftAttachment>("/api/uploads/attachments", { method: "POST", body });
-        setAttachments((current) => [...current, uploaded]);
-      }
-      dirty.current = true;
-      setStatus("Unsaved changes");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
-    }
-  };
-
-  const queueDraft = async () => {
-    const hasEmptySubject = !subject.trim();
-    if (hasEmptySubject && !window.confirm("Send this email without a subject?")) return;
-    setQueueing(true);
-    setError("");
-    try {
-      const id = await saveDraft();
-      if (!id) throw new Error("Draft is still saving. Try again in a moment.");
-      await api(`/api/drafts/${id}/queue`, { method: "POST", body: JSON.stringify({ allowEmptySubject: hasEmptySubject }) });
-      setStatus("Queued");
-      setRefresh((value) => value + 1);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to queue draft");
-    } finally {
-      setQueueing(false);
-    }
-  };
-
-  const removeDraft = async () => {
-    if (!draftId || !window.confirm("Delete this draft?")) return;
-    await api(`/api/drafts/${draftId}`, { method: "DELETE" });
-    setDraftId(null);
-    setTo([]);
-    setCc([]);
-    setBcc([]);
-    setSubject("");
-    setAttachments([]);
-    editor?.commands.clearContent();
-    setStatus("Not saved");
+  const removeTemplate = async () => {
+    if (!templateId || !window.confirm("Delete this template?")) return;
+    await api(`/api/templates/${templateId}`, { method: "DELETE" });
+    newTemplate();
     setRefresh((value) => value + 1);
   };
 
   return (
-    <Page title="Compose" actions={<GoogleAuthStatus />}>
+    <Page title="Template Builder" actions={<GoogleAuthStatus />}>
       {error && <p className="error">{error}</p>}
       <div className="compose-layout">
         <section className="composer-shell">
-          <RecipientField label="To" values={to} onChange={(values) => { dirty.current = true; setStatus("Unsaved changes"); setTo(values); }} />
-          <RecipientField label="Cc" values={cc} onChange={(values) => { dirty.current = true; setStatus("Unsaved changes"); setCc(values); }} />
-          <RecipientField label="Bcc" values={bcc} onChange={(values) => { dirty.current = true; setStatus("Unsaved changes"); setBcc(values); }} />
+          <input className="template-name-input" placeholder="Template name" value={name} onChange={(event) => { dirty.current = true; setStatus("Unsaved changes"); setName(event.target.value); }} />
           <input className="subject-input" placeholder="Subject" value={subject} onChange={(event) => { dirty.current = true; setStatus("Unsaved changes"); setSubject(event.target.value); }} />
+          <div className="placeholder-strip">
+            <span>Supported placeholders:</span>
+            <code>{"{{fullName}}"}</code>
+            <code>{"{{company}}"}</code>
+            <code>{"{{designation}}"}</code>
+          </div>
           <ComposerToolbar editor={editor} />
           <div className="composer-editor">
             <EditorContent editor={editor} />
           </div>
-          <div
-            className={`attachment-dropzone ${dragging ? "dragging" : ""}`}
-            onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={(event) => {
-              event.preventDefault();
-              setDragging(false);
-              void uploadFiles(event.dataTransfer.files);
-            }}
-          >
-            <Paperclip size={16} />
-            <span>Drop files here or</span>
-            <label className="link-button">
-              upload
-              <input hidden type="file" multiple onChange={(event) => event.target.files && uploadFiles(event.target.files)} />
-            </label>
-          </div>
-          {attachments.length > 0 && (
-            <div className="attachment-list">
-              {attachments.map((attachment) => (
-                <div key={attachment.id} className="attachment-pill">
-                  <Paperclip size={14} />
-                  <span>{attachment.originalName}</span>
-                  <small>{Math.ceil(attachment.size / 1024)} KB</small>
-                  <button type="button" onClick={() => { dirty.current = true; setStatus("Unsaved changes"); setAttachments((current) => current.filter((item) => item.id !== attachment.id)); }}><X size={14} /></button>
-                </div>
-              ))}
-            </div>
-          )}
           <div className="composer-footer">
-            <button onClick={queueDraft} disabled={queueing || saving}><Send size={16} />{queueing ? "Queueing..." : "Queue Send"}</button>
-            <button className="secondary" onClick={() => void saveDraft()} disabled={saving}><Save size={16} />{saving ? "Saving..." : "Save Draft"}</button>
-            <button className="secondary icon-only danger" title="Delete draft" onClick={removeDraft} disabled={!draftId}><Trash2 size={16} /></button>
+            <button onClick={() => void saveTemplate()} disabled={saving}><Save size={16} />{saving ? "Saving..." : "Save Template"}</button>
+            <button className="secondary" onClick={newTemplate}>New Template</button>
+            <button className="secondary" onClick={setDefault} disabled={saving || (!templateId && !name.trim())}>Set Default</button>
+            <button className="secondary icon-only danger" title="Delete template" onClick={removeTemplate} disabled={!templateId}><Trash2 size={16} /></button>
             <span className="save-status">{status}</span>
           </div>
         </section>
         <aside className="drafts-panel">
-          <h2>Drafts & Outbox</h2>
+          <h2>Templates</h2>
           <div className="draft-list">
-            {(drafts ?? []).map((draft) => (
-              <button key={draft.id} className={`draft-row ${draft.id === draftId ? "active" : ""}`} onClick={() => loadDraft(draft.id)}>
-                <strong>{draft.subject || "(No subject)"}</strong>
-                <span>{draft.to.join(", ") || "No recipients"}</span>
-                <small>{draft.status} - {new Date(draft.updatedAt).toLocaleString()}</small>
+            {(templates ?? []).map((template) => (
+              <button key={template.id} className={`draft-row ${template.id === templateId ? "active" : ""}`} onClick={() => loadTemplate(template)}>
+                <strong>{template.name}</strong>
+                <span>{template.subjectTemplate}</span>
+                <small>{template.isDefault ? "Default" : `Updated ${new Date(template.updatedAt).toLocaleString()}`}</small>
               </button>
             ))}
-            {(!drafts || drafts.length === 0) && <p className="note-text">No drafts yet.</p>}
+            {(!templates || templates.length === 0) && <p className="note-text">No templates yet. Create one to start sending.</p>}
           </div>
         </aside>
       </div>

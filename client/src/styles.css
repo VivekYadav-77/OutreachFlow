@@ -678,31 +678,7 @@ th {
   overflow: hidden;
 }
 
-.recipient-row {
-  align-items: flex-start;
-  border-bottom: 1px solid var(--border-lighter);
-  display: grid;
-  gap: 12px;
-  grid-template-columns: 44px 1fr;
-  min-height: 44px;
-  padding: 8px 14px;
-}
-
-.recipient-row > span {
-  color: var(--text-muted);
-  font-size: 13px;
-  line-height: 28px;
-}
-
-.recipient-input {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  min-height: 28px;
-}
-
-.recipient-input input,
+.template-name-input,
 .subject-input {
   background: transparent;
   border: 0;
@@ -711,32 +687,40 @@ th {
   padding: 0;
 }
 
-.recipient-input input:focus,
+.template-name-input:focus,
 .subject-input:focus,
 .composer-editor-content:focus {
   outline: none;
 }
 
-.recipient-chip {
-  background: var(--primary-light);
-  border-radius: 999px;
-  color: var(--primary-dark);
-  gap: 5px;
-  min-height: 26px;
-  padding: 0 8px;
-}
-
-.recipient-chip:hover {
-  background: var(--border-light);
-  color: var(--text-main);
-}
-
+.template-name-input,
 .subject-input {
   border-bottom: 1px solid var(--border-lighter);
   color: var(--text-main);
   display: block;
   font-size: 18px;
   padding: 12px 14px;
+}
+
+.template-name-input {
+  font-weight: 700;
+}
+
+.placeholder-strip {
+  align-items: center;
+  border-bottom: 1px solid var(--border-lighter);
+  color: var(--text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 14px;
+}
+
+.placeholder-strip code {
+  background: var(--primary-light);
+  border-radius: 5px;
+  color: var(--primary-dark);
+  padding: 3px 6px;
 }
 
 .composer-toolbar {
@@ -792,57 +776,12 @@ th {
   max-width: 100%;
 }
 
-.attachment-dropzone {
-  align-items: center;
-  border-top: 1px dashed var(--border);
-  color: var(--text-muted);
-  display: flex;
-  gap: 8px;
-  padding: 13px 16px;
-}
-
-.attachment-dropzone.dragging {
-  background: var(--info-bg);
-  color: var(--info-text);
-}
-
 .link-button {
   color: var(--primary);
   cursor: pointer;
   font-weight: 650;
 }
 
-.attachment-list {
-  border-top: 1px solid var(--border-lighter);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 12px 16px;
-}
-
-.attachment-pill {
-  align-items: center;
-  background: var(--bg-body);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  display: inline-flex;
-  gap: 7px;
-  max-width: 100%;
-  padding: 7px 9px;
-}
-
-.attachment-pill span {
-  max-width: 260px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.attachment-pill small {
-  color: var(--text-muted);
-}
-
-.attachment-pill button,
 .icon-only {
   min-height: 28px;
   padding: 0 6px;

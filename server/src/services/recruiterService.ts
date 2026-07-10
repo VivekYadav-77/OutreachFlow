@@ -6,6 +6,7 @@ import { db } from "../database/db.js";
 import { recruiters } from "../database/schema.js";
 import { NotFoundError, ValidationError } from "../utils/errors.js";
 import { createLog } from "./logService.js";
+import { getDefaultTemplate, getTemplate } from "./templateService.js";
 
 export const recruiterSchema = z.object({
   fullName: z.string().min(1),
@@ -14,7 +15,8 @@ export const recruiterSchema = z.object({
   email: z.string().email().transform((value) => value.toLowerCase()),
   linkedin: z.string().optional().nullable(),
   notes: z.string().optional().default(""),
-  status: z.enum(["Pending", "Sent", "Failed", "Replied", "Skipped"]).optional().default("Pending")
+  status: z.enum(["Pending", "Sent", "Failed", "Replied", "Skipped"]).optional().default("Pending"),
+  templateId: z.number().int().positive().optional().nullable()
 });
 
 export const recruiterQuerySchema = z.object({
@@ -52,14 +54,18 @@ export async function getRecruiter(id: number) {
 
 export async function createRecruiter(input: z.infer<typeof recruiterSchema>) {
   const parsed = recruiterSchema.parse(input);
-  const [created] = await db.insert(recruiters).values(parsed).returning();
+  const templateId = parsed.templateId ?? (await getDefaultTemplate()).id;
+  await getTemplate(templateId);
+  const [created] = await db.insert(recruiters).values({ ...parsed, templateId }).returning();
   await createLog({ event: "recruiter.created", message: `Recruiter created: ${created.email}`, recruiterId: created.id });
   return created;
 }
 
 export async function updateRecruiter(id: number, input: Partial<z.infer<typeof recruiterSchema>>) {
   await getRecruiter(id);
-  const [updated] = await db.update(recruiters).set({ ...input, updatedAt: new Date() }).where(eq(recruiters.id, id)).returning();
+  const parsed = recruiterSchema.partial().parse(input);
+  if (parsed.templateId) await getTemplate(parsed.templateId);
+  const [updated] = await db.update(recruiters).set({ ...parsed, updatedAt: new Date() }).where(eq(recruiters.id, id)).returning();
   await createLog({ event: "recruiter.updated", message: `Recruiter updated: ${updated.email}`, recruiterId: id });
   return updated;
 }
@@ -82,6 +88,7 @@ export async function importRecruitersFromCsv(csv: string) {
   });
 
   const required = ["fullName", "company", "email"];
+  const defaultTemplate = await getDefaultTemplate();
   const seen = new Set<string>();
   const summary = { imported: 0, duplicates: 0, invalid: 0, skipped: 0 };
 
@@ -96,7 +103,8 @@ export async function importRecruitersFromCsv(csv: string) {
       designation: row.designation || null,
       email: row.email,
       linkedin: row.linkedin || null,
-      notes: row.notes || ""
+      notes: row.notes || "",
+      templateId: defaultTemplate.id
     });
     if (!parsed.success) {
       summary.invalid += 1;
@@ -108,7 +116,7 @@ export async function importRecruitersFromCsv(csv: string) {
     }
     seen.add(parsed.data.email);
     try {
-      await db.insert(recruiters).values(parsed.data);
+      await db.insert(recruiters).values({ ...parsed.data, templateId: defaultTemplate.id });
       summary.imported += 1;
     } catch {
       summary.duplicates += 1;

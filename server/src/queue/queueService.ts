@@ -1,13 +1,50 @@
-import { and, asc, count, eq, lte, or, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, lte, or, sql } from "drizzle-orm";
 import { db } from "../database/db.js";
-import { campaignRecipients, emailQueue, recruiters } from "../database/schema.js";
-import { QueueError } from "../utils/errors.js";
+import { campaignRecipients, emailDrafts, emailQueue, recruiters } from "../database/schema.js";
+import { QueueError, ValidationError } from "../utils/errors.js";
 import { createLog } from "../services/logService.js";
 import { getSettings, setWorkerStatus } from "../services/settingsService.js";
+import { getDefaultTemplate, getTemplate, renderTemplate } from "../services/templateService.js";
 
 export async function enqueuePendingRecruiters() {
-  await createLog({ event: "queue.start", message: "Worker start requested; composer drafts are queued from the Compose page" });
-  return { created: 0 };
+  const settings = await getSettings();
+  const defaultTemplate = await getDefaultTemplate();
+  const pendingRecruiters = await db.select().from(recruiters).where(eq(recruiters.status, "Pending")).orderBy(asc(recruiters.createdAt));
+  let created = 0;
+  let skipped = 0;
+
+  for (const recruiter of pendingRecruiters) {
+    const [{ value: activeJobs }] = await db
+      .select({ value: count() })
+      .from(emailQueue)
+      .where(and(eq(emailQueue.recruiterId, recruiter.id), inArray(emailQueue.state, ["Pending", "Sending", "Retrying", "Paused"])));
+    if (activeJobs > 0) {
+      skipped += 1;
+      continue;
+    }
+
+    const template = recruiter.templateId ? await getTemplate(recruiter.templateId).catch(() => defaultTemplate) : defaultTemplate;
+    if (!template) throw new ValidationError("No default template exists. Create a template before starting the queue.");
+    const rendered = renderTemplate(template, recruiter);
+    const [draft] = await db
+      .insert(emailDrafts)
+      .values({
+        to: [recruiter.email],
+        cc: [],
+        bcc: [],
+        subject: rendered.subject,
+        html: rendered.html,
+        text: rendered.text,
+        status: "Queued",
+        queuedAt: new Date()
+      })
+      .returning();
+    await db.insert(emailQueue).values({ draftId: draft.id, recruiterId: recruiter.id, maxAttempts: settings.retryCount });
+    created += 1;
+  }
+
+  await createLog({ event: "queue.enqueued", message: `${created} personalized recruiter email(s) queued`, metadata: { created, skipped } });
+  return { created, skipped };
 }
 
 export async function getQueueSummary() {

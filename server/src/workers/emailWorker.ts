@@ -97,6 +97,7 @@ class EmailWorker {
         let logMessage = "Email sent";
         let recruiterId: number | undefined;
         if (job.draftId) {
+          recruiterId = job.recruiterId ?? undefined;
           await markDraftSending(job.draftId);
           const email = await getComposedEmailWithAttachments(job.draftId);
           result = await emailService.sendComposedEmail(email);

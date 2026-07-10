@@ -12,6 +12,7 @@ import { queueRoutes } from "./routes/queueRoutes.js";
 import { recruiterRoutes } from "./routes/recruiterRoutes.js";
 import { settingsRoutes } from "./routes/settingsRoutes.js";
 import { statisticsRoutes } from "./routes/statisticsRoutes.js";
+import { templateRoutes } from "./routes/templateRoutes.js";
 import { uploadRoutes } from "./routes/uploadRoutes.js";
 
 fs.mkdirSync(config.uploadsDir, { recursive: true });
@@ -27,6 +28,7 @@ app.use("/api/health", healthRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/recruiters", recruiterRoutes);
 app.use("/api/drafts", draftRoutes);
+app.use("/api/templates", templateRoutes);
 app.use("/api/uploads", uploadRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/queue", queueRoutes);
