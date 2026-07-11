@@ -10,7 +10,7 @@ import Highlight from "@tiptap/extension-highlight";
 import LinkExtension from "@tiptap/extension-link";
 import ImageExtension from "@tiptap/extension-image";
 import { TextStyle } from "@tiptap/extension-text-style";
-import { AlignCenter, AlignLeft, AlignRight, BarChart3, Bold, Check, ExternalLink, Highlighter, Image, Italic, LayoutDashboard, Link, List, ListChecks, ListOrdered, Mail, Monitor, Moon, Pencil, Redo2, Save, Settings, Sun, Trash2, Underline, Undo2, Upload, X, XCircle, AlertTriangle, ChevronDown, ChevronUp, RefreshCw, SlidersHorizontal, Search } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, BarChart3, Bold, Check, ExternalLink, Highlighter, Image, Italic, LayoutDashboard, Link, List, ListChecks, ListOrdered, Mail, Monitor, Moon, Paperclip, Pencil, Redo2, Save, Settings, Sun, Trash2, Underline, Undo2, Upload, X, XCircle, AlertTriangle, ChevronDown, ChevronUp, RefreshCw, SlidersHorizontal, Search } from "lucide-react";
 import "./styles.css";
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
 
@@ -751,6 +751,8 @@ function Compose() {
   const [error, setError] = React.useState("");
   const [saving, setSaving] = React.useState(false);
   const [bodyVersion, setBodyVersion] = React.useState(0);
+  const [attachments, setAttachments] = React.useState<Array<{ id: number; originalName: string; size: number }>>([]);
+  const [uploadingAttachment, setUploadingAttachment] = React.useState(false);
   const dirty = React.useRef(false);
 
   const editor = useEditor({
@@ -781,6 +783,7 @@ function Compose() {
       setName(selected.name);
       setSubject(selected.subjectTemplate);
       editor?.commands.setContent(selected.htmlTemplate || "");
+      setAttachments((selected as any).attachments || []);
       setStatus(selected.isDefault ? "Default template" : "Loaded");
       dirty.current = false;
     }
@@ -788,14 +791,16 @@ function Compose() {
 
   const payload = React.useCallback(() => {
     const html = editor?.getHTML() ?? "";
-    return { name, subjectTemplate: subject, htmlTemplate: html, textTemplate: emailTextFromHtml(html) };
-  }, [editor, name, subject]);
+    const attachmentIds = attachments.map((att) => att.id);
+    return { name, subjectTemplate: subject, htmlTemplate: html, textTemplate: emailTextFromHtml(html), attachmentIds };
+  }, [editor, name, subject, attachments]);
 
-  const loadTemplate = (template: Template) => {
+  const loadTemplate = (template: Template & { attachments?: Array<{ id: number; originalName: string; size: number }> }) => {
     setTemplateId(template.id);
     setName(template.name);
     setSubject(template.subjectTemplate);
     editor?.commands.setContent(template.htmlTemplate || "");
+    setAttachments(template.attachments || []);
     setError("");
     setStatus(template.isDefault ? "Default template" : "Loaded");
     dirty.current = false;
@@ -806,6 +811,7 @@ function Compose() {
     setName("");
     setSubject("");
     editor?.commands.clearContent();
+    setAttachments([]);
     setStatus("New template");
     setError("");
     dirty.current = false;
@@ -836,11 +842,12 @@ function Compose() {
     setStatus("Saving...");
     try {
       const saved = templateId
-        ? await api<Template>(`/api/templates/${templateId}`, { method: "PUT", body: JSON.stringify(payload()) })
-        : await api<Template>("/api/templates", { method: "POST", body: JSON.stringify(payload()) });
+        ? await api<Template & { attachments?: any[] }>(`/api/templates/${templateId}`, { method: "PUT", body: JSON.stringify(payload()) })
+        : await api<Template & { attachments?: any[] }>("/api/templates", { method: "POST", body: JSON.stringify(payload()) });
       setTemplateId(saved.id);
       setName(saved.name);
       setSubject(saved.subjectTemplate);
+      setAttachments(saved.attachments || []);
       setStatus(`Saved ${new Date().toLocaleTimeString()}`);
       dirty.current = false;
       setRefresh((value) => value + 1);
@@ -858,7 +865,7 @@ function Compose() {
     if (!dirty.current) return;
     const timer = window.setTimeout(() => void saveTemplate(false), 1200);
     return () => window.clearTimeout(timer);
-  }, [name, subject, bodyVersion, saveTemplate]);
+  }, [name, subject, bodyVersion, attachments, saveTemplate]);
 
   const setDefault = async () => {
     const id = templateId ?? await saveTemplate();
@@ -902,8 +909,42 @@ function Compose() {
     }
   };
 
+  const uploadAttachment = async (file?: File) => {
+    if (!file) return;
+    setUploadingAttachment(true);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const res = await api<{ id: number; originalName: string; size: number }>("/api/uploads/attachments", {
+        method: "POST",
+        body
+      });
+      setAttachments((current) => [...current, res]);
+      dirty.current = true;
+      setStatus("Unsaved changes");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to upload attachment");
+    } finally {
+      setUploadingAttachment(false);
+    }
+  };
+
+  const removeAttachment = (id: number) => {
+    setAttachments((current) => current.filter((att) => att.id !== id));
+    dirty.current = true;
+    setStatus("Unsaved changes");
+  };
+
   return (
-    <Page title="Template Builder" actions={<GoogleAuthStatus />}>
+    <Page
+      title="Template Builder"
+      actions={
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <button className="button secondary" onClick={newTemplate}>New Template</button>
+          <GoogleAuthStatus />
+        </div>
+      }
+    >
       {error && <p className="error">{error}</p>}
       <div className="compose-layout">
         <section className="composer-shell">
@@ -919,9 +960,55 @@ function Compose() {
           <div className="composer-editor">
             <EditorContent editor={editor} />
           </div>
+
+          <div className="composer-attachments-section">
+            <div className="attachments-header">
+              <span className="attachments-title">Template Attachments</span>
+              <label className="attachment-upload-btn">
+                <Paperclip size={14} />
+                Attach File
+                <input
+                  type="file"
+                  hidden
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      void uploadAttachment(file);
+                    }
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
+            {uploadingAttachment && (
+              <div className="attachment-uploading">
+                <RefreshCw size={14} className="refresh-spin" /> Uploading attachment...
+              </div>
+            )}
+            <div className="attachments-list">
+              {attachments.map((att) => (
+                <div key={att.id} className="attachment-item">
+                  <Paperclip size={14} className="attachment-icon" />
+                  <span className="attachment-name" title={att.originalName}>{att.originalName}</span>
+                  <span className="attachment-size">({(att.size / 1024).toFixed(1)} KB)</span>
+                  <button
+                    type="button"
+                    className="attachment-remove-btn"
+                    title="Remove Attachment"
+                    onClick={() => removeAttachment(att.id)}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              ))}
+              {attachments.length === 0 && !uploadingAttachment && (
+                <p className="no-attachments-text">No attachments for this template. Click "Attach File" to add files.</p>
+              )}
+            </div>
+          </div>
+
           <div className="composer-footer">
             <button onClick={() => void saveTemplate()} disabled={saving}><Save size={16} />{saving ? "Saving..." : "Save Template"}</button>
-            <button className="secondary" onClick={newTemplate}>New Template</button>
             <button className="secondary" onClick={setDefault} disabled={saving || (!templateId && !name.trim())}>Set Default</button>
             <button className="secondary icon-only danger" title="Delete template" onClick={removeTemplate} disabled={!templateId}><Trash2 size={16} /></button>
             <span className="save-status">{status}</span>

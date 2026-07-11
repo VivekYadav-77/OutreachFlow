@@ -1128,3 +1128,123 @@ th {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+/* Template Attachments Styling */
+.composer-attachments-section {
+  border-top: 1px solid var(--border-lighter);
+  padding: 16px;
+  background-color: var(--bg-panel);
+}
+
+.attachments-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.attachments-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.attachment-upload-btn {
+  align-items: center;
+  background: var(--primary-light);
+  border: 1px dashed var(--primary);
+  border-radius: 6px;
+  color: var(--primary-dark);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  transition: all 0.2s ease;
+}
+
+.attachment-upload-btn:hover {
+  background: var(--primary);
+  color: #ffffff;
+  border-style: solid;
+}
+
+.attachment-uploading {
+  font-size: 13px;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.attachments-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.attachment-item {
+  background: var(--bg-body);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+  max-width: 320px;
+  transition: all 0.2s ease;
+}
+
+.attachment-item:hover {
+  border-color: var(--primary);
+  box-shadow: 0 2px 8px var(--shadow-primary);
+}
+
+.attachment-icon {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.attachment-name {
+  color: var(--text-main);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-size {
+  color: var(--text-muted);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.attachment-remove-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  min-height: auto;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.attachment-remove-btn:hover {
+  background: var(--error-bg);
+  color: var(--error-text) !important;
+}
+
+.no-attachments-text {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0;
+}

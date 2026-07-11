@@ -1,6 +1,6 @@
 import { and, asc, count, eq, inArray, lte, or, sql } from "drizzle-orm";
 import { db } from "../database/db.js";
-import { campaignRecipients, emailDrafts, emailQueue, recruiters } from "../database/schema.js";
+import { campaignRecipients, emailDrafts, emailQueue, recruiters, emailDraftAttachments } from "../database/schema.js";
 import { QueueError, ValidationError } from "../utils/errors.js";
 import { createLog } from "../services/logService.js";
 import { getSettings, setWorkerStatus } from "../services/settingsService.js";
@@ -49,6 +49,16 @@ export async function enqueuePendingRecruiters() {
         queuedAt: new Date()
       })
       .returning();
+
+    if (template && (template as any).attachments && (template as any).attachments.length > 0) {
+      await db.insert(emailDraftAttachments).values(
+        (template as any).attachments.map((file: any) => ({
+          draftId: draft.id,
+          fileId: file.id
+        }))
+      );
+    }
+
     await db.insert(emailQueue).values({ draftId: draft.id, recruiterId: recruiter.id, maxAttempts: settings.retryCount });
     created += 1;
   }

@@ -3,7 +3,7 @@ import { parseString } from "@fast-csv/parse";
 import { and, asc, count, desc, eq, ilike, or, inArray, ne } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../database/db.js";
-import { recruiters, emailQueue, emailDrafts } from "../database/schema.js";
+import { recruiters, emailQueue, emailDrafts, emailDraftAttachments } from "../database/schema.js";
 import { NotFoundError, ValidationError } from "../utils/errors.js";
 import { createLog } from "./logService.js";
 import { getDefaultTemplate, getTemplate, renderTemplate } from "./templateService.js";
@@ -118,6 +118,17 @@ export async function updateRecruiter(id: number, input: Partial<z.infer<typeof 
             updatedAt: new Date()
           })
           .where(eq(emailDrafts.id, job.draftId));
+
+        // Sync template attachments to regenerated draft
+        await db.delete(emailDraftAttachments).where(eq(emailDraftAttachments.draftId, job.draftId));
+        if ((template as any).attachments && (template as any).attachments.length > 0) {
+          await db.insert(emailDraftAttachments).values(
+            (template as any).attachments.map((file: any) => ({
+              draftId: job.draftId,
+              fileId: file.id
+            }))
+          );
+        }
       }
     }
   }

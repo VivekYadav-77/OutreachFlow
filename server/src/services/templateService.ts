@@ -1,7 +1,7 @@
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, ne, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../database/db.js";
-import { emailTemplates, recruiters } from "../database/schema.js";
+import { emailTemplates, recruiters, emailTemplateAttachments, uploadedFiles } from "../database/schema.js";
 import type { EmailTemplate, Recruiter } from "../database/schema.js";
 import { NotFoundError, ValidationError } from "../utils/errors.js";
 import { createLog } from "./logService.js";
@@ -11,7 +11,8 @@ export const templateSchema = z.object({
   subjectTemplate: z.string().trim().min(1),
   htmlTemplate: z.string().min(1),
   textTemplate: z.string().optional(),
-  isDefault: z.boolean().optional()
+  isDefault: z.boolean().optional(),
+  attachmentIds: z.array(z.coerce.number().int().positive()).optional()
 });
 
 function htmlToText(html: string) {
@@ -56,20 +57,73 @@ function normalizeTemplate(input: z.infer<typeof templateSchema>) {
   };
 }
 
+async function assertAttachmentIds(attachmentIds: number[]) {
+  if (attachmentIds.length === 0) return [];
+  const files = await db.select().from(uploadedFiles).where(and(inArray(uploadedFiles.id, attachmentIds), eq(uploadedFiles.kind, "attachment")));
+  if (files.length !== new Set(attachmentIds).size) throw new ValidationError("One or more attachments are invalid");
+  return files;
+}
+
+async function replaceTemplateAttachments(templateId: number, attachmentIds: number[]) {
+  await assertAttachmentIds(attachmentIds);
+  await db.delete(emailTemplateAttachments).where(eq(emailTemplateAttachments.templateId, templateId));
+  if (attachmentIds.length > 0) {
+    await db.insert(emailTemplateAttachments).values(attachmentIds.map((fileId) => ({ templateId, fileId })));
+  }
+}
+
 export async function listTemplates() {
-  return db.select().from(emailTemplates).orderBy(desc(emailTemplates.isDefault), desc(emailTemplates.updatedAt));
+  const templates = await db.select().from(emailTemplates).orderBy(desc(emailTemplates.isDefault), desc(emailTemplates.updatedAt));
+  const result = [];
+  for (const template of templates) {
+    const attachments = await db
+      .select({
+        id: uploadedFiles.id,
+        originalName: uploadedFiles.originalName,
+        mimeType: uploadedFiles.mimeType,
+        size: uploadedFiles.size,
+        createdAt: uploadedFiles.createdAt
+      })
+      .from(emailTemplateAttachments)
+      .innerJoin(uploadedFiles, eq(emailTemplateAttachments.fileId, uploadedFiles.id))
+      .where(eq(emailTemplateAttachments.templateId, template.id));
+    result.push({ ...template, attachments });
+  }
+  return result;
 }
 
 export async function getTemplate(id: number) {
   const [template] = await db.select().from(emailTemplates).where(eq(emailTemplates.id, id));
   if (!template) throw new NotFoundError("Template not found");
-  return template;
+  const attachments = await db
+    .select({
+      id: uploadedFiles.id,
+      originalName: uploadedFiles.originalName,
+      mimeType: uploadedFiles.mimeType,
+      size: uploadedFiles.size,
+      createdAt: uploadedFiles.createdAt
+    })
+    .from(emailTemplateAttachments)
+    .innerJoin(uploadedFiles, eq(emailTemplateAttachments.fileId, uploadedFiles.id))
+    .where(eq(emailTemplateAttachments.templateId, id));
+  return { ...template, attachments };
 }
 
 export async function getDefaultTemplate() {
   const [template] = await db.select().from(emailTemplates).where(eq(emailTemplates.isDefault, true)).limit(1);
   if (!template) throw new ValidationError("No default template exists. Create a template before starting the queue.");
-  return template;
+  const attachments = await db
+    .select({
+      id: uploadedFiles.id,
+      originalName: uploadedFiles.originalName,
+      mimeType: uploadedFiles.mimeType,
+      size: uploadedFiles.size,
+      createdAt: uploadedFiles.createdAt
+    })
+    .from(emailTemplateAttachments)
+    .innerJoin(uploadedFiles, eq(emailTemplateAttachments.fileId, uploadedFiles.id))
+    .where(eq(emailTemplateAttachments.templateId, template.id));
+  return { ...template, attachments };
 }
 
 async function ensureOneDefault(preferredId?: number) {
@@ -83,12 +137,15 @@ async function ensureOneDefault(preferredId?: number) {
 
 export async function createTemplate(input: z.infer<typeof templateSchema>) {
   const parsed = normalizeTemplate(input);
+  const attachmentIds = input.attachmentIds ?? [];
+  await assertAttachmentIds(attachmentIds);
   const existing = await db.select().from(emailTemplates).limit(1);
   const shouldDefault = parsed.isDefault || existing.length === 0;
   const [created] = await db
     .insert(emailTemplates)
     .values({ ...parsed, isDefault: shouldDefault })
     .returning();
+  await replaceTemplateAttachments(created.id, attachmentIds);
   if (shouldDefault) await ensureOneDefault(created.id);
   await createLog({ event: "template.created", message: `Template created: ${created.name}`, metadata: { templateId: created.id } });
   return getTemplate(created.id);
@@ -97,12 +154,19 @@ export async function createTemplate(input: z.infer<typeof templateSchema>) {
 export async function updateTemplate(id: number, input: Partial<z.infer<typeof templateSchema>>) {
   await getTemplate(id);
   const parsed = templateSchema.partial().parse(input);
+  const attachmentIds = parsed.attachmentIds;
   const values = {
-    ...parsed,
+    name: parsed.name,
+    subjectTemplate: parsed.subjectTemplate,
+    htmlTemplate: parsed.htmlTemplate,
     textTemplate: parsed.textTemplate?.trim() || (parsed.htmlTemplate ? htmlToText(parsed.htmlTemplate) : undefined),
+    isDefault: parsed.isDefault,
     updatedAt: new Date()
   };
   const [updated] = await db.update(emailTemplates).set(values).where(eq(emailTemplates.id, id)).returning();
+  if (attachmentIds !== undefined) {
+    await replaceTemplateAttachments(id, attachmentIds);
+  }
   if (parsed.isDefault) await ensureOneDefault(id);
   await createLog({ event: "template.updated", message: `Template updated: ${updated.name}`, metadata: { templateId: id } });
   return getTemplate(id);

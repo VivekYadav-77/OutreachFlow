@@ -95,6 +95,22 @@ export const emailDraftAttachments = pgTable(
   })
 );
 
+export const emailTemplateAttachments = pgTable(
+  "email_template_attachments",
+  {
+    templateId: integer("template_id")
+      .notNull()
+      .references(() => emailTemplates.id, { onDelete: "cascade" }),
+    fileId: integer("file_id")
+      .notNull()
+      .references(() => uploadedFiles.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.templateId, table.fileId] })
+  })
+);
+
 export const campaigns = pgTable("campaigns", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
