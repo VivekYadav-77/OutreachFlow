@@ -587,17 +587,68 @@ function Recruiters() {
         )}
 
         <form className="form-grid" onSubmit={submit}>
-          <input disabled={!hasTemplates} required placeholder="Full name" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
-          <input disabled={!hasTemplates} required placeholder="Company" value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
-          <input disabled={!hasTemplates} required type="email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-          <input disabled={!hasTemplates} placeholder="Designation" value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} />
-          <select disabled={!hasTemplates} required value={form.templateId} onChange={(e) => setForm({ ...form, templateId: e.target.value })}>
-            <option value="">Select a template...</option>
-            {(templates ?? []).map((template) => (
-              <option key={template.id} value={template.id}>{template.name}{template.isDefault ? " (Default)" : ""}</option>
-            ))}
-          </select>
-          <button disabled={!hasTemplates}>Add Recruiter</button>
+          <label htmlFor="add-fullName">
+            Full Name
+            <input
+              id="add-fullName"
+              disabled={!hasTemplates}
+              required
+              placeholder="Full name"
+              value={form.fullName}
+              onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+            />
+          </label>
+          <label htmlFor="add-company">
+            Company
+            <input
+              id="add-company"
+              disabled={!hasTemplates}
+              required
+              placeholder="Company"
+              value={form.company}
+              onChange={(e) => setForm({ ...form, company: e.target.value })}
+            />
+          </label>
+          <label htmlFor="add-email">
+            Email
+            <input
+              id="add-email"
+              disabled={!hasTemplates}
+              required
+              type="email"
+              placeholder="Email"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+            />
+          </label>
+          <label htmlFor="add-designation">
+            Designation
+            <input
+              id="add-designation"
+              disabled={!hasTemplates}
+              placeholder="Designation"
+              value={form.designation}
+              onChange={(e) => setForm({ ...form, designation: e.target.value })}
+            />
+          </label>
+          <label htmlFor="add-templateId">
+            Template
+            <select
+              id="add-templateId"
+              disabled={!hasTemplates}
+              required
+              value={form.templateId}
+              onChange={(e) => setForm({ ...form, templateId: e.target.value })}
+            >
+              <option value="">Select a template...</option>
+              {(templates ?? []).map((template) => (
+                <option key={template.id} value={template.id}>{template.name}{template.isDefault ? " (Default)" : ""}</option>
+              ))}
+            </select>
+          </label>
+          <div className="form-submit-container">
+            <button disabled={!hasTemplates}>Add Recruiter</button>
+          </div>
         </form>
       </section>
 
@@ -669,25 +720,25 @@ function Recruiters() {
             <div className="modal-body">
               {editError && <p className="error" style={{ marginBottom: "16px" }}>{editError}</p>}
               <form className="stack" onSubmit={handleUpdate}>
-                <label>
+                <label htmlFor="edit-fullName">
                   Full Name
-                  <input required value={editForm.fullName} onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })} />
+                  <input id="edit-fullName" required value={editForm.fullName} onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })} />
                 </label>
-                <label>
+                <label htmlFor="edit-company">
                   Company
-                  <input required value={editForm.company} onChange={(e) => setEditForm({ ...editForm, company: e.target.value })} />
+                  <input id="edit-company" required value={editForm.company} onChange={(e) => setEditForm({ ...editForm, company: e.target.value })} />
                 </label>
-                <label>
+                <label htmlFor="edit-email">
                   Email
-                  <input required type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
+                  <input id="edit-email" required type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
                 </label>
-                <label>
+                <label htmlFor="edit-designation">
                   Designation
-                  <input value={editForm.designation} onChange={(e) => setEditForm({ ...editForm, designation: e.target.value })} />
+                  <input id="edit-designation" value={editForm.designation} onChange={(e) => setEditForm({ ...editForm, designation: e.target.value })} />
                 </label>
-                <label>
+                <label htmlFor="edit-templateId">
                   Template
-                  <select required value={editForm.templateId} onChange={(e) => setEditForm({ ...editForm, templateId: e.target.value })}>
+                  <select id="edit-templateId" required value={editForm.templateId} onChange={(e) => setEditForm({ ...editForm, templateId: e.target.value })}>
                     <option value="">Select a template...</option>
                     {(templates ?? []).map((template) => (
                       <option key={template.id} value={template.id}>{template.name}{template.isDefault ? " (Default)" : ""}</option>
