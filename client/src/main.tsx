@@ -506,6 +506,15 @@ type Template = {
   updatedAt: string;
 };
 
+type ImportResult = {
+  imported: number;
+  skipped: number;
+  invalid: number;
+  duplicates: number;
+  errors: { row: number; reason: string }[];
+};
+
+
 function Recruiters() {
   const [refresh, setRefresh] = React.useState(0);
   const [search, setSearch] = React.useState("");
@@ -517,11 +526,14 @@ function Recruiters() {
   // State for Loading and Editing
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [isImporting, setIsImporting] = React.useState(false);
+  const [importResult, setImportResult] = React.useState<ImportResult | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [deletingId, setDeletingId] = React.useState<number | null>(null);
   const [editingRecruiter, setEditingRecruiter] = React.useState<Recruiter | null>(null);
   const [editForm, setEditForm] = React.useState({ fullName: "", company: "", email: "", designation: "", templateId: "" });
   const [editError, setEditError] = React.useState("");
   const [editSubmitting, setEditSubmitting] = React.useState(false);
+
 
   React.useEffect(() => {
     if (form.templateId && templates && !templates.some((t) => String(t.id) === form.templateId)) {
@@ -603,14 +615,19 @@ function Recruiters() {
     try {
       const body = new FormData();
       body.append("file", file);
-      await api("/api/recruiters/import", { method: "POST", body });
+      const result = await api<ImportResult>("/api/recruiters/import", { method: "POST", body });
+      setImportResult(result);
       setRefresh((value) => value + 1);
     } catch (err) {
+      // Server-thrown errors (e.g. wrong column names) surface here as a clear message
       alert(err instanceof Error ? err.message : "Failed to import CSV");
     } finally {
       setIsImporting(false);
+      // Reset file input so the same file can be re-selected after fixing it
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
+
 
   const hasTemplates = templates && templates.length > 0;
 
@@ -628,8 +645,14 @@ function Recruiters() {
             ) : (
               "Import CSV"
             )}
-            <input hidden type="file" accept=".csv,text/csv" disabled={isImporting} onChange={(event) => importCsv(event.target.files?.[0])} />
+            <input ref={fileInputRef} hidden type="file" accept=".csv,text/csv" disabled={isImporting} onChange={(event) => importCsv(event.target.files?.[0])} />
           </label>
+        </div>
+        <div className="csv-format-hint">
+          <span>Required columns:</span>
+          <code>fullName</code><code>company</code><code>email</code>
+          <span className="csv-hint-sep">·  Optional:</span>
+          <code>designation</code><code>linkedin</code><code>notes</code>
         </div>
         
         {!hasTemplates && (
@@ -813,6 +836,73 @@ function Recruiters() {
                   <button type="button" className="secondary" disabled={editSubmitting} onClick={() => setEditingRecruiter(null)}>Cancel</button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Import Result Modal */}
+      {importResult && (
+        <div className="modal-overlay" onClick={() => setImportResult(null)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '520px' }}>
+            <div className="modal-header">
+              <h2>Import Complete</h2>
+              <button className="modal-close" onClick={() => setImportResult(null)}><X size={24} /></button>
+            </div>
+            <div className="modal-body">
+              <div className="import-result-grid">
+                <div className="import-result-stat success">
+                  <span className="import-stat-value">{importResult.imported}</span>
+                  <span className="import-stat-label">Imported</span>
+                </div>
+                <div className="import-result-stat duplicate">
+                  <span className="import-stat-value">{importResult.duplicates}</span>
+                  <span className="import-stat-label">Duplicates</span>
+                </div>
+                <div className="import-result-stat skipped">
+                  <span className="import-stat-value">{importResult.skipped}</span>
+                  <span className="import-stat-label">Skipped</span>
+                </div>
+                <div className="import-result-stat invalid">
+                  <span className="import-stat-value">{importResult.invalid}</span>
+                  <span className="import-stat-label">Invalid</span>
+                </div>
+              </div>
+
+              {importResult.errors.length > 0 && (
+                <div style={{ marginTop: '20px' }}>
+                  <p style={{ fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-muted)' }}>
+                    Row-level issues (first {importResult.errors.length} shown):
+                  </p>
+                  <div className="import-errors-table-wrap">
+                    <table className="import-errors-table">
+                      <thead>
+                        <tr>
+                          <th>Row</th>
+                          <th>Reason</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {importResult.errors.map((err, idx) => (
+                          <tr key={idx}>
+                            <td>#{err.row}</td>
+                            <td>{err.reason}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {importResult.imported === 0 && importResult.errors.length === 0 && (
+                <p style={{ marginTop: '16px', color: 'var(--text-muted)', fontSize: '13px' }}>
+                  No recruiters were imported. The file may have been empty or all rows were duplicates.
+                </p>
+              )}
+            </div>
+            <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end' }}>
+              <button onClick={() => setImportResult(null)}>Close</button>
             </div>
           </div>
         </div>

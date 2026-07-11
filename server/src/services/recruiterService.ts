@@ -173,7 +173,14 @@ export async function deleteRecruiter(id: number) {
   }
 }
 
+// Exported so the frontend can show the expected structure as a hint
+export const CSV_REQUIRED_COLUMNS = ["fullName", "company", "email"] as const;
+export const CSV_OPTIONAL_COLUMNS = ["designation", "linkedin", "notes"] as const;
+
 type CsvRow = Record<string, string>;
+type CsvImportError = { row: number; reason: string };
+
+const MAX_ROW_ERRORS = 10;
 
 export async function importRecruitersFromCsv(csv: string) {
   const rows = await new Promise<CsvRow[]>((resolve, reject) => {
@@ -184,16 +191,44 @@ export async function importRecruitersFromCsv(csv: string) {
       .on("end", () => resolve(output));
   });
 
-  const required = ["fullName", "company", "email"];
+  // ── Header-level structural check ────────────────────────────────────────────
+  // If the CSV has rows but is missing required column names entirely, fail fast
+  // with a clear, actionable error message instead of silently skipping everything.
+  if (rows.length > 0) {
+    const firstRow = rows[0];
+    const missingColumns = CSV_REQUIRED_COLUMNS.filter((col) => !(col in firstRow));
+    if (missingColumns.length > 0) {
+      throw new ValidationError(
+        `CSV is missing required columns: ${missingColumns.join(", ")}. ` +
+        `Required: ${CSV_REQUIRED_COLUMNS.join(", ")}. ` +
+        `Optional: ${CSV_OPTIONAL_COLUMNS.join(", ")}.`
+      );
+    }
+  }
+
   const defaultTemplate = await getDefaultTemplate().catch(() => null);
   const seen = new Set<string>();
-  const summary = { imported: 0, duplicates: 0, invalid: 0, skipped: 0 };
+  const summary = {
+    imported: 0,
+    duplicates: 0,
+    invalid: 0,
+    skipped: 0,
+    errors: [] as CsvImportError[]
+  };
 
-  for (const row of rows) {
-    if (!required.every((key) => key in row)) {
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const rowNumber = i + 1; // 1-indexed for human readability
+
+    if (!CSV_REQUIRED_COLUMNS.every((key) => key in row && row[key].trim() !== "")) {
+      if (summary.errors.length < MAX_ROW_ERRORS) {
+        const missing = CSV_REQUIRED_COLUMNS.filter((key) => !(key in row) || row[key].trim() === "");
+        summary.errors.push({ row: rowNumber, reason: `Missing required field(s): ${missing.join(", ")}` });
+      }
       summary.skipped += 1;
       continue;
     }
+
     const parsed = recruiterSchema.safeParse({
       fullName: row.fullName,
       company: row.company,
@@ -203,15 +238,22 @@ export async function importRecruitersFromCsv(csv: string) {
       notes: row.notes || "",
       templateId: defaultTemplate ? defaultTemplate.id : null
     });
+
     if (!parsed.success) {
+      if (summary.errors.length < MAX_ROW_ERRORS) {
+        const reason = parsed.error.issues[0]?.message ?? "Validation failed";
+        summary.errors.push({ row: rowNumber, reason });
+      }
       summary.invalid += 1;
       continue;
     }
+
     if (seen.has(parsed.data.email)) {
       summary.duplicates += 1;
       continue;
     }
     seen.add(parsed.data.email);
+
     try {
       await db.insert(recruiters).values({ ...parsed.data, templateId: defaultTemplate ? defaultTemplate.id : null });
       summary.imported += 1;
@@ -219,7 +261,8 @@ export async function importRecruitersFromCsv(csv: string) {
       summary.duplicates += 1;
     }
   }
-  await createLog({ event: "recruiter.imported", message: "CSV import completed", metadata: summary });
+
+  await createLog({ event: "recruiter.imported", message: "CSV import completed", metadata: { imported: summary.imported, duplicates: summary.duplicates, invalid: summary.invalid, skipped: summary.skipped } });
   return summary;
 }
 
