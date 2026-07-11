@@ -1270,3 +1270,204 @@ th {
   color: var(--text-muted);
   margin: 0;
 }
+
+/* Clickable setting inputs on SettingsPage */
+.clickable-setting-input-wrapper {
+  position: relative;
+  cursor: pointer;
+  display: block;
+}
+
+.clickable-setting-input-wrapper input {
+  padding-right: 32px !important;
+  cursor: pointer;
+  background-color: var(--config-bg) !important;
+  border-color: var(--config-border) !important;
+  transition: all 0.2s ease;
+  width: 100%;
+}
+
+.clickable-setting-input-wrapper input:hover {
+  border-color: var(--primary) !important;
+  background-color: var(--primary-light) !important;
+}
+
+.clickable-setting-input-icon {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+/* Setting Option Modal Styles */
+.option-modal-presets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.preset-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s ease;
+  background: var(--bg-panel);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.preset-card:hover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  transform: translateY(-1px);
+}
+
+.preset-card.active {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  box-shadow: 0 0 0 2px var(--primary);
+}
+
+.preset-card-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.preset-card-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.preset-card.other-card {
+  grid-column: 1 / -1;
+  font-weight: 600;
+}
+
+.custom-input-section {
+  border-top: 1px solid var(--border-lighter);
+  padding-top: 16px;
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.warning-alert {
+  background-color: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  border-radius: 6px;
+  padding: 12px 16px;
+  color: var(--warning-text-dark);
+  font-size: 13px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.warning-alert svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.error-alert {
+  background-color: var(--error-bg);
+  border: 1px solid var(--error-border);
+  border-radius: 6px;
+  padding: 12px 16px;
+  color: var(--error-text);
+  font-size: 13px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-top: 8px;
+}
+
+.error-alert svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* Visual Safety Meter on SettingsPage */
+.safety-meter-card {
+  margin-bottom: 20px;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+}
+
+.safety-meter-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.safety-meter-title {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.safety-meter-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.safety-meter-badge.safe {
+  background: var(--safe-bg);
+  color: var(--safe-text);
+}
+
+.safety-meter-badge.warning {
+  background: var(--warning-light-bg);
+  color: var(--warning-text);
+}
+
+.safety-meter-badge.danger {
+  background: var(--error-bg);
+  color: var(--error-text);
+}
+
+.safety-meter-bar-container {
+  height: 8px;
+  background: var(--border-lighter);
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.safety-meter-bar {
+  height: 100%;
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.safety-meter-bar.safe {
+  background: #10b981;
+}
+
+.safety-meter-bar.warning {
+  background: #f59e0b;
+}
+
+.safety-meter-bar.danger {
+  background: #ef4444;
+}
+
+.safety-meter-desc {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 8px;
+  margin-bottom: 0;
+}
+
