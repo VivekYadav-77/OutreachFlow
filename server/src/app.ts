@@ -14,6 +14,7 @@ import { settingsRoutes } from "./routes/settingsRoutes.js";
 import { statisticsRoutes } from "./routes/statisticsRoutes.js";
 import { templateRoutes } from "./routes/templateRoutes.js";
 import { uploadRoutes } from "./routes/uploadRoutes.js";
+import { coverLetterRoutes } from "./routes/coverLetterRoutes.js";
 
 fs.mkdirSync(config.uploadsDir, { recursive: true });
 fs.mkdirSync(config.logsDir, { recursive: true });
@@ -30,6 +31,7 @@ app.use("/api/recruiters", recruiterRoutes);
 app.use("/api/drafts", draftRoutes);
 app.use("/api/templates", templateRoutes);
 app.use("/api/uploads", uploadRoutes);
+app.use("/api/cover-letter", coverLetterRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/queue", queueRoutes);
 app.use("/api/logs", logRoutes);

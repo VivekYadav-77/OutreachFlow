@@ -10,7 +10,7 @@ import Highlight from "@tiptap/extension-highlight";
 import LinkExtension from "@tiptap/extension-link";
 import ImageExtension from "@tiptap/extension-image";
 import { TextStyle } from "@tiptap/extension-text-style";
-import { AlignCenter, AlignLeft, AlignRight, BarChart3, Bold, Check, ExternalLink, Highlighter, Image, Italic, LayoutDashboard, Link, List, ListChecks, ListOrdered, Mail, Monitor, Moon, Paperclip, Pencil, Redo2, Save, Settings, Sun, Trash2, Underline, Undo2, Upload, X, XCircle, AlertTriangle, ChevronDown, ChevronUp, RefreshCw, SlidersHorizontal, Search } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, BarChart3, Bold, Check, ExternalLink, Highlighter, Image, Italic, LayoutDashboard, Link, List, ListChecks, ListOrdered, Mail, Monitor, Moon, Paperclip, Pencil, Redo2, Save, Settings, Sun, Trash2, Underline, Undo2, Upload, X, XCircle, AlertTriangle, ChevronDown, ChevronUp, RefreshCw, SlidersHorizontal, Search, FileText } from "lucide-react";
 import "./styles.css";
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
 
@@ -168,6 +168,7 @@ function Shell() {
     { to: "/", label: "Dashboard", icon: LayoutDashboard },
     { to: "/recruiters", label: "Recruiters", icon: Mail },
     { to: "/compose", label: "Templates", icon: Mail },
+    { to: "/cover-letter", label: "Cover Letters", icon: FileText },
     { to: "/settings", label: "Settings", icon: Settings },
     { to: "/logs", label: "Logs", icon: ListChecks },
     { to: "/statistics", label: "Statistics", icon: BarChart3 }
@@ -194,6 +195,7 @@ function Shell() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/recruiters" element={<Recruiters />} />
           <Route path="/compose" element={<Compose />} />
+          <Route path="/cover-letter" element={<CoverLetterGenerator />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/logs" element={<Logs />} />
           <Route path="/statistics" element={<Statistics />} />
@@ -215,9 +217,18 @@ function StatCard({ label, value }: { label: string; value: React.ReactNode }) {
 function Dashboard() {
   const [refresh, setRefresh] = React.useState(0);
   const { data, error } = useApi<Stats>("/api/statistics", refresh);
+  const [actionLoading, setActionLoading] = React.useState<string | null>(null);
+
   const action = async (path: string) => {
-    await api(path, { method: "POST" });
-    setRefresh((value) => value + 1);
+    setActionLoading(path);
+    try {
+      await api(path, { method: "POST" });
+      setRefresh((value) => value + 1);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Action failed");
+    } finally {
+      setActionLoading(null);
+    }
   };
   return (
     <Page title="Dashboard" actions={<GoogleAuthStatus />}>
@@ -230,11 +241,26 @@ function Dashboard() {
       </div>
       <section className="panel">
         <div className="toolbar">
-          <button onClick={() => action("/api/queue/start")}>Start</button>
-          <button onClick={() => action("/api/queue/pause")}>Pause</button>
-          <button onClick={() => action("/api/queue/resume")}>Resume</button>
-          <button onClick={() => action("/api/queue/stop")}>Stop</button>
-          <button onClick={() => action("/api/queue/retry-failed")}>Retry Failed</button>
+          <button disabled={actionLoading !== null} onClick={() => action("/api/queue/start")}>
+            {actionLoading === "/api/queue/start" && <RefreshCw size={14} className="refresh-spin" />}
+            Start
+          </button>
+          <button disabled={actionLoading !== null} onClick={() => action("/api/queue/pause")}>
+            {actionLoading === "/api/queue/pause" && <RefreshCw size={14} className="refresh-spin" />}
+            Pause
+          </button>
+          <button disabled={actionLoading !== null} onClick={() => action("/api/queue/resume")}>
+            {actionLoading === "/api/queue/resume" && <RefreshCw size={14} className="refresh-spin" />}
+            Resume
+          </button>
+          <button disabled={actionLoading !== null} onClick={() => action("/api/queue/stop")}>
+            {actionLoading === "/api/queue/stop" && <RefreshCw size={14} className="refresh-spin" />}
+            Stop
+          </button>
+          <button disabled={actionLoading !== null} onClick={() => action("/api/queue/retry-failed")}>
+            {actionLoading === "/api/queue/retry-failed" && <RefreshCw size={14} className="refresh-spin" />}
+            Retry Failed
+          </button>
         </div>
       </section>
       <section className="panel">
@@ -488,10 +514,14 @@ function Recruiters() {
   const defaultTemplate = templates?.find((template) => template.isDefault) ?? templates?.[0];
   const [form, setForm] = React.useState({ fullName: "", company: "", email: "", designation: "", notes: "", templateId: "" });
   
-  // State for Editing
+  // State for Loading and Editing
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
+  const [isImporting, setIsImporting] = React.useState(false);
+  const [deletingId, setDeletingId] = React.useState<number | null>(null);
   const [editingRecruiter, setEditingRecruiter] = React.useState<Recruiter | null>(null);
   const [editForm, setEditForm] = React.useState({ fullName: "", company: "", email: "", designation: "", templateId: "" });
   const [editError, setEditError] = React.useState("");
+  const [editSubmitting, setEditSubmitting] = React.useState(false);
 
   React.useEffect(() => {
     if (form.templateId && templates && !templates.some((t) => String(t.id) === form.templateId)) {
@@ -509,9 +539,16 @@ function Recruiters() {
       alert("Please select a template first.");
       return;
     }
-    await api("/api/recruiters", { method: "POST", body: JSON.stringify({ ...form, templateId: Number(form.templateId) }) });
-    setForm({ fullName: "", company: "", email: "", designation: "", notes: "", templateId: defaultTemplate ? String(defaultTemplate.id) : "" });
-    setRefresh((value) => value + 1);
+    setIsSubmitting(true);
+    try {
+      await api("/api/recruiters", { method: "POST", body: JSON.stringify({ ...form, templateId: Number(form.templateId) }) });
+      setForm({ fullName: "", company: "", email: "", designation: "", notes: "", templateId: defaultTemplate ? String(defaultTemplate.id) : "" });
+      setRefresh((value) => value + 1);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to add recruiter");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const startEdit = (recruiter: Recruiter) => {
@@ -529,6 +566,7 @@ function Recruiters() {
   const handleUpdate = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!editingRecruiter) return;
+    setEditSubmitting(true);
     try {
       await api(`/api/recruiters/${editingRecruiter.id}`, {
         method: "PUT",
@@ -541,37 +579,56 @@ function Recruiters() {
       setRefresh((value) => value + 1);
     } catch (err) {
       setEditError(err instanceof Error ? err.message : "Failed to update recruiter");
+    } finally {
+      setEditSubmitting(false);
     }
   };
 
   const handleDelete = async (id: number) => {
     if (!window.confirm("Are you sure you want to delete this recruiter?")) return;
+    setDeletingId(id);
     try {
       await api(`/api/recruiters/${id}`, { method: "DELETE" });
       setRefresh((value) => value + 1);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to delete recruiter");
+    } finally {
+      setDeletingId(null);
     }
   };
 
   const importCsv = async (file?: File) => {
     if (!file) return;
-    const body = new FormData();
-    body.append("file", file);
-    await api("/api/recruiters/import", { method: "POST", body });
-    setRefresh((value) => value + 1);
+    setIsImporting(true);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      await api("/api/recruiters/import", { method: "POST", body });
+      setRefresh((value) => value + 1);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to import CSV");
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   const hasTemplates = templates && templates.length > 0;
 
   return (
-    <Page title="Recruiters" actions={<a className="button secondary" href={`${API_URL}/api/recruiters/export`}>Export CSV</a>}>
+    <Page title="Recruiters" actions={<a className={`button secondary ${isImporting ? "disabled" : ""}`} href={`${API_URL}/api/recruiters/export`}>Export CSV</a>}>
       <section className="panel">
         <div className="toolbar">
-          <input placeholder="Search" value={search} onChange={(event) => setSearch(event.target.value)} />
-          <label className="button secondary">
-            Import CSV
-            <input hidden type="file" accept=".csv,text/csv" onChange={(event) => importCsv(event.target.files?.[0])} />
+          <input placeholder="Search" value={search} onChange={(event) => setSearch(event.target.value)} disabled={isImporting} />
+          <label className={`button secondary ${isImporting ? "disabled" : ""}`}>
+            {isImporting ? (
+              <>
+                <RefreshCw size={14} className="refresh-spin" />
+                Importing CSV...
+              </>
+            ) : (
+              "Import CSV"
+            )}
+            <input hidden type="file" accept=".csv,text/csv" disabled={isImporting} onChange={(event) => importCsv(event.target.files?.[0])} />
           </label>
         </div>
         
@@ -589,7 +646,7 @@ function Recruiters() {
             <span>Full Name<span className="required-star">*</span></span>
             <input
               id="add-fullName"
-              disabled={!hasTemplates}
+              disabled={!hasTemplates || isSubmitting}
               required
               placeholder="Full name"
               value={form.fullName}
@@ -600,7 +657,7 @@ function Recruiters() {
             <span>Company<span className="required-star">*</span></span>
             <input
               id="add-company"
-              disabled={!hasTemplates}
+              disabled={!hasTemplates || isSubmitting}
               required
               placeholder="Company"
               value={form.company}
@@ -611,7 +668,7 @@ function Recruiters() {
             <span>Email<span className="required-star">*</span></span>
             <input
               id="add-email"
-              disabled={!hasTemplates}
+              disabled={!hasTemplates || isSubmitting}
               required
               type="email"
               placeholder="Email"
@@ -623,7 +680,7 @@ function Recruiters() {
             <span>Designation<span className="required-star">*</span></span>
             <input
               id="add-designation"
-              disabled={!hasTemplates}
+              disabled={!hasTemplates || isSubmitting}
               placeholder="Designation"
               value={form.designation}
               onChange={(e) => setForm({ ...form, designation: e.target.value })}
@@ -633,7 +690,7 @@ function Recruiters() {
             <span>Template<span className="required-star">*</span></span>
             <select
               id="add-templateId"
-              disabled={!hasTemplates}
+              disabled={!hasTemplates || isSubmitting}
               required
               value={form.templateId}
               onChange={(e) => setForm({ ...form, templateId: e.target.value })}
@@ -645,7 +702,10 @@ function Recruiters() {
             </select>
           </label>
           <div className="form-submit-container">
-            <button disabled={!hasTemplates}>Add Recruiter</button>
+            <button disabled={!hasTemplates || isSubmitting}>
+              {isSubmitting && <RefreshCw size={14} className="refresh-spin" />}
+              Add Recruiter
+            </button>
           </div>
         </form>
       </section>
@@ -680,6 +740,7 @@ function Recruiters() {
                       type="button"
                       className="action-btn"
                       title="Edit Recruiter"
+                      disabled={deletingId !== null}
                       onClick={() => startEdit(row)}
                     >
                       <Pencil size={14} />
@@ -688,9 +749,10 @@ function Recruiters() {
                       type="button"
                       className="action-btn danger"
                       title="Delete Recruiter"
+                      disabled={deletingId !== null}
                       onClick={() => handleDelete(row.id)}
                     >
-                      <Trash2 size={14} />
+                      {deletingId === row.id ? <RefreshCw size={14} className="refresh-spin" /> : <Trash2 size={14} />}
                     </button>
                   </div>
                 </td>
@@ -709,34 +771,34 @@ function Recruiters() {
 
       {/* Edit Recruiter Modal */}
       {editingRecruiter && (
-        <div className="modal-overlay" onClick={() => setEditingRecruiter(null)}>
+        <div className="modal-overlay" onClick={() => !editSubmitting && setEditingRecruiter(null)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
             <div className="modal-header">
               <h2>Edit Recruiter</h2>
-              <button className="modal-close" onClick={() => setEditingRecruiter(null)}><X size={24} /></button>
+              <button className="modal-close" disabled={editSubmitting} onClick={() => setEditingRecruiter(null)}><X size={24} /></button>
             </div>
             <div className="modal-body">
               {editError && <p className="error" style={{ marginBottom: "16px" }}>{editError}</p>}
               <form className="stack" onSubmit={handleUpdate}>
                 <label htmlFor="edit-fullName">
                   <span>Full Name<span className="required-star">*</span></span>
-                  <input id="edit-fullName" required value={editForm.fullName} onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })} />
+                  <input id="edit-fullName" required disabled={editSubmitting} value={editForm.fullName} onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })} />
                 </label>
                 <label htmlFor="edit-company">
                   <span>Company<span className="required-star">*</span></span>
-                  <input id="edit-company" required value={editForm.company} onChange={(e) => setEditForm({ ...editForm, company: e.target.value })} />
+                  <input id="edit-company" required disabled={editSubmitting} value={editForm.company} onChange={(e) => setEditForm({ ...editForm, company: e.target.value })} />
                 </label>
                 <label htmlFor="edit-email">
                   <span>Email<span className="required-star">*</span></span>
-                  <input id="edit-email" required type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
+                  <input id="edit-email" required disabled={editSubmitting} type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
                 </label>
                 <label htmlFor="edit-designation">
                   <span>Designation<span className="required-star">*</span></span>
-                  <input id="edit-designation" value={editForm.designation} onChange={(e) => setEditForm({ ...editForm, designation: e.target.value })} />
+                  <input id="edit-designation" disabled={editSubmitting} value={editForm.designation} onChange={(e) => setEditForm({ ...editForm, designation: e.target.value })} />
                 </label>
                 <label htmlFor="edit-templateId">
                   <span>Template<span className="required-star">*</span></span>
-                  <select id="edit-templateId" required value={editForm.templateId} onChange={(e) => setEditForm({ ...editForm, templateId: e.target.value })}>
+                  <select id="edit-templateId" required disabled={editSubmitting} value={editForm.templateId} onChange={(e) => setEditForm({ ...editForm, templateId: e.target.value })}>
                     <option value="">Select a template...</option>
                     {(templates ?? []).map((template) => (
                       <option key={template.id} value={template.id}>{template.name}{template.isDefault ? " (Default)" : ""}</option>
@@ -744,8 +806,11 @@ function Recruiters() {
                   </select>
                 </label>
                 <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
-                  <button type="submit">Save Changes</button>
-                  <button type="button" className="secondary" onClick={() => setEditingRecruiter(null)}>Cancel</button>
+                  <button type="submit" disabled={editSubmitting}>
+                    {editSubmitting && <RefreshCw size={14} className="refresh-spin" />}
+                    Save Changes
+                  </button>
+                  <button type="button" className="secondary" disabled={editSubmitting} onClick={() => setEditingRecruiter(null)}>Cancel</button>
                 </div>
               </form>
             </div>
@@ -803,6 +868,9 @@ function Compose() {
   const [attachments, setAttachments] = React.useState<Array<{ id: number; originalName: string; size: number }>>([]);
   const [uploadingAttachment, setUploadingAttachment] = React.useState(false);
   const [hasLoadedInitial, setHasLoadedInitial] = React.useState(false);
+  const [isSettingDefault, setIsSettingDefault] = React.useState(false);
+  const [isDeleting, setIsDeleting] = React.useState(false);
+  const [cardAction, setCardAction] = React.useState<{ id: number; type: 'default' | 'delete' } | null>(null);
   const dirty = React.useRef(false);
 
   const editor = useEditor({
@@ -919,22 +987,37 @@ function Compose() {
   }, [name, subject, bodyVersion, attachments, saveTemplate]);
 
   const setDefault = async () => {
-    const id = templateId ?? await saveTemplate();
-    if (!id) return;
-    await api(`/api/templates/${id}/default`, { method: "POST" });
-    setStatus("Default template");
-    setRefresh((value) => value + 1);
+    setIsSettingDefault(true);
+    try {
+      const id = templateId ?? await saveTemplate();
+      if (!id) return;
+      await api(`/api/templates/${id}/default`, { method: "POST" });
+      setStatus("Default template");
+      setRefresh((value) => value + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to set default template");
+    } finally {
+      setIsSettingDefault(false);
+    }
   };
 
   const removeTemplate = async () => {
     if (!templateId || !window.confirm("Delete this template?")) return;
-    await api(`/api/templates/${templateId}`, { method: "DELETE" });
-    newTemplate();
-    setRefresh((value) => value + 1);
+    setIsDeleting(true);
+    try {
+      await api(`/api/templates/${templateId}`, { method: "DELETE" });
+      newTemplate();
+      setRefresh((value) => value + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete template");
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const setDefaultFromList = async (id: number, event: React.MouseEvent) => {
     event.stopPropagation();
+    setCardAction({ id, type: 'default' });
     try {
       await api(`/api/templates/${id}/default`, { method: "POST" });
       if (templateId === id) {
@@ -943,12 +1026,15 @@ function Compose() {
       setRefresh((value) => value + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to set default template");
+    } finally {
+      setCardAction(null);
     }
   };
 
   const deleteFromList = async (id: number, event: React.MouseEvent) => {
     event.stopPropagation();
     if (!window.confirm("Delete this template?")) return;
+    setCardAction({ id, type: 'delete' });
     try {
       await api(`/api/templates/${id}`, { method: "DELETE" });
       if (templateId === id) {
@@ -957,6 +1043,8 @@ function Compose() {
       setRefresh((value) => value + 1);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete template");
+    } finally {
+      setCardAction(null);
     }
   };
 
@@ -1059,9 +1147,26 @@ function Compose() {
           </div>
 
           <div className="composer-footer">
-            <button onClick={() => void saveTemplate()} disabled={saving}><Save size={16} />{saving ? "Saving..." : "Save Template"}</button>
-            <button className="secondary" onClick={setDefault} disabled={saving || (!templateId && !name.trim())}>Set Default</button>
-            <button className="secondary icon-only danger" title="Delete template" onClick={removeTemplate} disabled={!templateId}><Trash2 size={16} /></button>
+            <button onClick={() => void saveTemplate()} disabled={saving || isSettingDefault || isDeleting}>
+              {saving ? (
+                <>
+                  <RefreshCw size={16} className="refresh-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save size={16} />
+                  Save Template
+                </>
+              )}
+            </button>
+            <button className="secondary" onClick={setDefault} disabled={saving || isSettingDefault || isDeleting || (!templateId && !name.trim())}>
+              {isSettingDefault && <RefreshCw size={14} className="refresh-spin" />}
+              Set Default
+            </button>
+            <button className="secondary icon-only danger" title="Delete template" onClick={removeTemplate} disabled={saving || isSettingDefault || isDeleting || !templateId}>
+              {isDeleting ? <RefreshCw size={16} className="refresh-spin" /> : <Trash2 size={16} />}
+            </button>
             <span className="save-status">{status}</span>
           </div>
         </section>
@@ -1082,8 +1187,10 @@ function Compose() {
                         type="button"
                         className="card-action-btn set-default-btn"
                         title="Set as Default"
+                        disabled={cardAction !== null}
                         onClick={(e) => setDefaultFromList(template.id, e)}
                       >
+                        {cardAction?.id === template.id && cardAction.type === 'default' && <RefreshCw size={12} className="refresh-spin" />}
                         Set Default
                       </button>
                     )}
@@ -1091,9 +1198,10 @@ function Compose() {
                       type="button"
                       className="card-action-btn delete-btn danger"
                       title="Delete Template"
+                      disabled={cardAction !== null}
                       onClick={(e) => deleteFromList(template.id, e)}
                     >
-                      <Trash2 size={14} />
+                      {cardAction?.id === template.id && cardAction.type === 'delete' ? <RefreshCw size={14} className="refresh-spin" /> : <Trash2 size={14} />}
                     </button>
                   </div>
                 </div>
@@ -1379,6 +1487,7 @@ function SettingsPage() {
   const { data } = useApi<Record<string, unknown>>("/api/settings", refresh);
   const [form, setForm] = React.useState<Record<string, unknown>>({});
   const [isGuidelinesOpen, setIsGuidelinesOpen] = React.useState(false);
+  const [isSaving, setIsSaving] = React.useState(false);
   const [modalState, setModalState] = React.useState<{ isOpen: boolean; key: string; value: string }>({
     isOpen: false,
     key: "",
@@ -1409,8 +1518,15 @@ function SettingsPage() {
       return;
     }
 
-    await api("/api/settings", { method: "PUT", body: JSON.stringify(form) });
-    setRefresh((value) => value + 1);
+    setIsSaving(true);
+    try {
+      await api("/api/settings", { method: "PUT", body: JSON.stringify(form) });
+      setRefresh((value) => value + 1);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to save settings");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const openModalFor = (key: string) => {
@@ -1510,12 +1626,13 @@ function SettingsPage() {
         <form className="stack" onSubmit={submit}>
           <div className="form-grid">
             {["dailyLimit", "minDelaySeconds", "maxDelaySeconds", "startTime", "endTime", "retryCount"].map((key) => (
-              <label key={key} style={{ cursor: 'pointer' }} onClick={() => openModalFor(key)}>
+              <label key={key} style={{ cursor: isSaving ? 'not-allowed' : 'pointer' }} onClick={() => !isSaving && openModalFor(key)}>
                 {FORMATTED_LABELS[key]}
                 <div className="clickable-setting-input-wrapper">
                   <input
                     type="text"
                     readOnly
+                    disabled={isSaving}
                     value={String(form[key] ?? "")}
                   />
                   <SlidersHorizontal className="clickable-setting-input-icon" size={16} />
@@ -1524,7 +1641,10 @@ function SettingsPage() {
             ))}
           </div>
           
-          <button style={{ marginTop: '16px' }}>Save Settings</button>
+          <button style={{ marginTop: '16px' }} disabled={isSaving}>
+            {isSaving && <RefreshCw size={14} className="refresh-spin" />}
+            Save Settings
+          </button>
         </form>
       </section>
     </Page>
@@ -1847,6 +1967,319 @@ function DataTable({ headers, rows }: { headers: string[]; rows: React.ReactNode
         </tbody>
       </table>
     </section>
+  );
+}
+
+function CoverLetterGenerator() {
+  const [activeResume, setActiveResume] = React.useState<any>(null);
+  const [loadingResume, setLoadingResume] = React.useState(true);
+  const [uploading, setUploading] = React.useState(false);
+  const [generating, setGenerating] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+  const [error, setError] = React.useState("");
+  const [saveStatus, setSaveStatus] = React.useState("");
+
+  const [form, setForm] = React.useState({
+    role: "",
+    company: "",
+    tone: "Professional & Formal",
+    jobDescription: "",
+    focusSkills: ""
+  });
+
+  const [subject, setSubject] = React.useState("");
+  const [saveName, setSaveName] = React.useState("");
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      UnderlineExtension,
+      TextStyle,
+      Color,
+      Highlight.configure({ multicolor: true }),
+      LinkExtension.configure({ openOnClick: false }),
+      ImageExtension,
+      TextAlign.configure({ types: ["heading", "paragraph"] })
+    ],
+    content: ""
+  });
+
+  React.useEffect(() => {
+    fetchActiveResume();
+  }, []);
+
+  const fetchActiveResume = async () => {
+    setLoadingResume(true);
+    try {
+      const res = await api<any>("/api/uploads/resume/active");
+      setActiveResume(res);
+    } catch (err) {
+      console.error("Failed to load active resume:", err);
+      setActiveResume(null);
+    } finally {
+      setLoadingResume(false);
+    }
+  };
+
+  const uploadResume = async (file: File) => {
+    setUploading(true);
+    setError("");
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const res = await api<any>("/api/uploads/resume", { method: "POST", body });
+      setActiveResume(res);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to upload resume");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleGenerate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeResume) {
+      setError("Please upload a resume first");
+      return;
+    }
+    setGenerating(true);
+    setError("");
+    setSaveStatus("");
+    try {
+      const skillsArray = form.focusSkills
+        ? form.focusSkills.split(",").map(s => s.trim()).filter(Boolean)
+        : [];
+      
+      const result = await api<{ subject: string; html: string }>("/api/cover-letter/generate", {
+        method: "POST",
+        body: JSON.stringify({
+          role: form.role,
+          company: form.company,
+          tone: form.tone,
+          jobDescription: form.jobDescription,
+          focusSkills: skillsArray
+        })
+      });
+
+      setSubject(result.subject);
+      setSaveName(`Cover Letter - ${form.role} - ${form.company}`);
+      editor?.commands.setContent(result.html);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Generation failed. Check that GEMINI_API_KEY is configured.");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleSaveTemplate = async () => {
+    if (!editor || !subject.trim() || !saveName.trim()) {
+      setError("Please generate a cover letter first and provide a template name");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    setSaveStatus("Saving...");
+    try {
+      const html = editor.getHTML();
+      await api("/api/templates", {
+        method: "POST",
+        body: JSON.stringify({
+          name: saveName,
+          subjectTemplate: subject,
+          htmlTemplate: html,
+          textTemplate: emailTextFromHtml(html),
+          attachmentIds: []
+        })
+      });
+      setSaveStatus("Saved successfully!");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save template");
+      setSaveStatus("Save failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Page title="AI Cover Letter Generator">
+      {error && <p className="error" style={{ marginBottom: "16px" }}>{error}</p>}
+      
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", alignItems: "start" }}>
+        
+        {/* Left Side: Setup & Input */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+          
+          {/* Resume Upload / Active Card */}
+          <section className="panel" style={{ padding: "16px" }}>
+            <h2 style={{ marginTop: 0, marginBottom: "12px", fontSize: "18px" }}>Active Resume</h2>
+            {loadingResume ? (
+              <p style={{ color: "var(--text-muted)" }}>Loading active resume...</p>
+            ) : activeResume ? (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--info-bg)", border: "1px solid var(--info-border)", borderRadius: "6px", padding: "12px" }}>
+                <div>
+                  <strong style={{ display: "block", color: "var(--info-text)" }}>{activeResume.originalName}</strong>
+                  <span style={{ fontSize: "12px", color: "var(--text-muted)" }}>Uploaded: {new Date(activeResume.createdAt).toLocaleDateString()}</span>
+                </div>
+                <label className={`button secondary ${uploading ? "disabled" : ""}`} style={{ minHeight: "32px", padding: "0 10px", fontSize: "14px", margin: 0 }}>
+                  {uploading ? <RefreshCw size={12} className="refresh-spin" /> : <Upload size={12} />}
+                  Replace
+                  <input hidden type="file" accept=".pdf" disabled={uploading} onChange={(e) => e.target.files?.[0] && uploadResume(e.target.files[0])} />
+                </label>
+              </div>
+            ) : (
+              <div style={{ textAlign: "center", border: "2px dashed var(--border)", borderRadius: "6px", padding: "24px", color: "var(--text-muted)" }}>
+                <p style={{ margin: "0 0 12px 0" }}>No resume uploaded yet</p>
+                <label className={`button ${uploading ? "disabled" : ""}`}>
+                  {uploading ? <RefreshCw size={14} className="refresh-spin" /> : <Upload size={14} />}
+                  Upload PDF Resume
+                  <input hidden type="file" accept=".pdf" disabled={uploading} onChange={(e) => e.target.files?.[0] && uploadResume(e.target.files[0])} />
+                </label>
+              </div>
+            )}
+          </section>
+
+          {/* Form Parameters */}
+          <section className="panel" style={{ padding: "16px" }}>
+            <h2 style={{ marginTop: 0, marginBottom: "16px", fontSize: "18px" }}>Generation Settings</h2>
+            <form className="stack" onSubmit={handleGenerate}>
+              <label htmlFor="gen-role">
+                <span>Target Job Role<span className="required-star">*</span></span>
+                <input
+                  id="gen-role"
+                  required
+                  placeholder="e.g. Senior React Developer"
+                  value={form.role}
+                  onChange={(e) => setForm({ ...form, role: e.target.value })}
+                />
+              </label>
+
+              <label htmlFor="gen-company">
+                <span>Target Company Name<span className="required-star">*</span></span>
+                <input
+                  id="gen-company"
+                  required
+                  placeholder="e.g. Google"
+                  value={form.company}
+                  onChange={(e) => setForm({ ...form, company: e.target.value })}
+                />
+              </label>
+
+              <label htmlFor="gen-tone">
+                <span>Template Style / Tone<span className="required-star">*</span></span>
+                <select
+                  id="gen-tone"
+                  required
+                  value={form.tone}
+                  onChange={(e) => setForm({ ...form, tone: e.target.value })}
+                >
+                  <option value="Professional & Formal">Professional & Formal (Structured, polite, standard layout)</option>
+                  <option value="Short & Crisp">Short & Crisp (Concise email focus, quick reading)</option>
+                  <option value="Story-Driven">Story-Driven (Highlights personal story, connection to mission)</option>
+                  <option value="Technical & Skills Focus">Technical & Skills Focus (Dives deep into scale, frameworks, and architecture)</option>
+                  <option value="Bold & Persuasive">Bold & Persuasive (Confident, clear value-proposition)</option>
+                </select>
+              </label>
+
+              <label htmlFor="gen-skills">
+                <span>Focus Skills (Comma-separated)</span>
+                <input
+                  id="gen-skills"
+                  placeholder="e.g. React, Node.js, GraphQL, AWS"
+                  value={form.focusSkills}
+                  onChange={(e) => setForm({ ...form, focusSkills: e.target.value })}
+                />
+              </label>
+
+              <label htmlFor="gen-description">
+                <span>Job Description / Context (Optional)</span>
+                <textarea
+                  id="gen-description"
+                  placeholder="Paste target job description snippet here..."
+                  rows={6}
+                  style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid var(--border)", background: "var(--bg-body)", color: "var(--text-main)", resize: "vertical", font: "inherit" }}
+                  value={form.jobDescription}
+                  onChange={(e) => setForm({ ...form, jobDescription: e.target.value })}
+                />
+              </label>
+
+              <div style={{ marginTop: "12px" }}>
+                <button type="submit" disabled={generating || !activeResume} style={{ width: "100%", justifyContent: "center" }}>
+                  {generating ? (
+                    <>
+                      <RefreshCw size={14} className="refresh-spin" />
+                      Generating Cover Letter...
+                    </>
+                  ) : (
+                    "Generate Cover Letter"
+                  )}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+
+        {/* Right Side: Generated Content & Editor */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+          <section className="panel" style={{ padding: "16px", minHeight: "500px" }}>
+            <h2 style={{ marginTop: 0, marginBottom: "16px", fontSize: "18px" }}>Generated Cover Letter</h2>
+            
+            {editor ? (
+              <div className="composer" style={{ border: "1px solid var(--border)", borderRadius: "6px", display: "flex", flexDirection: "column", height: "100%" }}>
+                
+                {/* Subject Field */}
+                <div style={{ display: "flex", alignItems: "center", borderBottom: "1px solid var(--border)", padding: "10px 14px", gap: "8px" }}>
+                  <span style={{ fontWeight: "bold", color: "var(--text-muted)" }}>Subject:</span>
+                  <input
+                    type="text"
+                    placeholder="Subject Line"
+                    style={{ flex: 1, border: "none", background: "transparent", fontSize: "15px", color: "var(--text-main)", fontWeight: "500", padding: 0 }}
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                  />
+                </div>
+
+                {/* Toolbar */}
+                <ComposerToolbar editor={editor} />
+
+                {/* Editor Content Area */}
+                <div style={{ padding: "14px", minHeight: "350px", overflowY: "auto" }}>
+                  <EditorContent editor={editor} />
+                </div>
+              </div>
+            ) : (
+              <p style={{ color: "var(--text-muted)" }}>Initializing editor...</p>
+            )}
+
+            {/* Save Template controls */}
+            {editor?.getHTML() && subject.trim() && (
+              <div style={{ marginTop: "20px", borderTop: "1px solid var(--border-light)", paddingTop: "16px" }}>
+                <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                  <label htmlFor="save-name" style={{ flex: 1 }}>
+                    <span style={{ fontSize: "13px", fontWeight: "bold", color: "var(--text-muted)", display: "block", marginBottom: "4px" }}>Save as Template Name</span>
+                    <input
+                      id="save-name"
+                      placeholder="e.g. Google React Dev Cover Letter"
+                      value={saveName}
+                      onChange={(e) => setSaveName(e.target.value)}
+                    />
+                  </label>
+                  <button onClick={handleSaveTemplate} disabled={saving} style={{ marginTop: "20px" }}>
+                    {saving && <RefreshCw size={14} className="refresh-spin" />}
+                    Save as Email Template
+                  </button>
+                </div>
+                {saveStatus && (
+                  <p style={{ marginTop: "8px", fontSize: "14px", fontWeight: "bold", color: saveStatus.includes("successfully") ? "var(--success-text)" : "var(--error-text)" }}>
+                    {saveStatus}
+                  </p>
+                )}
+              </div>
+            )}
+          </section>
+        </div>
+
+      </div>
+    </Page>
   );
 }
 
