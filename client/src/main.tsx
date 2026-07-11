@@ -278,7 +278,6 @@ function SafeSendingGuidelinesModal({ isOpen, onClose, settings }: { isOpen: boo
   const startTime = String(settings?.startTime ?? "09:00");
   const endTime = String(settings?.endTime ?? "18:00");
   const retryCount = Number(settings?.retryCount ?? 4);
-  const attachmentEnabled = Boolean(settings?.attachmentEnabled ?? false);
 
   const isSafe = dailyLimit <= 100 && minDelay >= 45;
 
@@ -411,7 +410,6 @@ function SafeSendingGuidelinesModal({ isOpen, onClose, settings }: { isOpen: boo
               <p><strong>Current Delay:</strong> &ge;{minDelay} seconds</p>
               <p><strong>Working Hours:</strong> {startTime} - {endTime}</p>
               <p><strong>Retry Count:</strong> {retryCount}</p>
-              <p><strong>Attachment Enabled:</strong> {attachmentEnabled ? "Yes" : "No"}</p>
               
               <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <strong>Status:</strong>
@@ -588,7 +586,7 @@ function Recruiters() {
 
         <form className="form-grid" onSubmit={submit}>
           <label htmlFor="add-fullName">
-            Full Name
+            <span>Full Name<span className="required-star">*</span></span>
             <input
               id="add-fullName"
               disabled={!hasTemplates}
@@ -599,7 +597,7 @@ function Recruiters() {
             />
           </label>
           <label htmlFor="add-company">
-            Company
+            <span>Company<span className="required-star">*</span></span>
             <input
               id="add-company"
               disabled={!hasTemplates}
@@ -610,7 +608,7 @@ function Recruiters() {
             />
           </label>
           <label htmlFor="add-email">
-            Email
+            <span>Email<span className="required-star">*</span></span>
             <input
               id="add-email"
               disabled={!hasTemplates}
@@ -622,7 +620,7 @@ function Recruiters() {
             />
           </label>
           <label htmlFor="add-designation">
-            Designation
+            <span>Designation<span className="required-star">*</span></span>
             <input
               id="add-designation"
               disabled={!hasTemplates}
@@ -632,7 +630,7 @@ function Recruiters() {
             />
           </label>
           <label htmlFor="add-templateId">
-            Template
+            <span>Template<span className="required-star">*</span></span>
             <select
               id="add-templateId"
               disabled={!hasTemplates}
@@ -721,23 +719,23 @@ function Recruiters() {
               {editError && <p className="error" style={{ marginBottom: "16px" }}>{editError}</p>}
               <form className="stack" onSubmit={handleUpdate}>
                 <label htmlFor="edit-fullName">
-                  Full Name
+                  <span>Full Name<span className="required-star">*</span></span>
                   <input id="edit-fullName" required value={editForm.fullName} onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })} />
                 </label>
                 <label htmlFor="edit-company">
-                  Company
+                  <span>Company<span className="required-star">*</span></span>
                   <input id="edit-company" required value={editForm.company} onChange={(e) => setEditForm({ ...editForm, company: e.target.value })} />
                 </label>
                 <label htmlFor="edit-email">
-                  Email
+                  <span>Email<span className="required-star">*</span></span>
                   <input id="edit-email" required type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} />
                 </label>
                 <label htmlFor="edit-designation">
-                  Designation
+                  <span>Designation<span className="required-star">*</span></span>
                   <input id="edit-designation" value={editForm.designation} onChange={(e) => setEditForm({ ...editForm, designation: e.target.value })} />
                 </label>
                 <label htmlFor="edit-templateId">
-                  Template
+                  <span>Template<span className="required-star">*</span></span>
                   <select id="edit-templateId" required value={editForm.templateId} onChange={(e) => setEditForm({ ...editForm, templateId: e.target.value })}>
                     <option value="">Select a template...</option>
                     {(templates ?? []).map((template) => (
@@ -1132,8 +1130,7 @@ function SettingsPage() {
         maxDelaySeconds: String(data.maxDelaySeconds ?? 150),
         startTime: String(data.startTime ?? "09:00"),
         endTime: String(data.endTime ?? "18:00"),
-        retryCount: String(data.retryCount ?? 4),
-        attachmentEnabled: Boolean(data.attachmentEnabled)
+        retryCount: String(data.retryCount ?? 4)
       });
     }
   }, [data]);
@@ -1141,12 +1138,6 @@ function SettingsPage() {
     event.preventDefault();
     await api("/api/settings", { method: "PUT", body: JSON.stringify(form) });
     setRefresh((value) => value + 1);
-  };
-  const uploadResume = async (file?: File) => {
-    if (!file) return;
-    const body = new FormData();
-    body.append("file", file);
-    await api("/api/uploads/resume", { method: "POST", body });
   };
   return (
     <Page title="Campaign Settings" actions={<GoogleAuthStatus />}>
@@ -1176,18 +1167,8 @@ function SettingsPage() {
             ))}
           </div>
           
-          <label className="inline" style={{ marginTop: '16px' }}><input type="checkbox" checked={Boolean(form.attachmentEnabled)} onChange={(e) => setForm({ ...form, attachmentEnabled: e.target.checked })} /> Attach resume</label>
-          
           <button style={{ marginTop: '16px' }}>Save Settings</button>
         </form>
-      </section>
-      <section className="panel">
-        <h2>Resume</h2>
-        <label className="button secondary">
-          <Upload size={16} />
-          Upload Resume PDF
-          <input hidden type="file" accept="application/pdf" onChange={(event) => uploadResume(event.target.files?.[0])} />
-        </label>
       </section>
     </Page>
   );

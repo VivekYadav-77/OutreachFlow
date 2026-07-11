@@ -286,6 +286,11 @@ h2 {
   height: 100%;
 }
 
+.required-star {
+  color: var(--error-text);
+  margin-left: 3px;
+}
+
 .stack {
   display: grid;
   gap: 12px;
