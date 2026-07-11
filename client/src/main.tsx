@@ -753,6 +753,7 @@ function Compose() {
   const [bodyVersion, setBodyVersion] = React.useState(0);
   const [attachments, setAttachments] = React.useState<Array<{ id: number; originalName: string; size: number }>>([]);
   const [uploadingAttachment, setUploadingAttachment] = React.useState(false);
+  const [hasLoadedInitial, setHasLoadedInitial] = React.useState(false);
   const dirty = React.useRef(false);
 
   const editor = useEditor({
@@ -777,7 +778,7 @@ function Compose() {
   });
 
   React.useEffect(() => {
-    if (!templateId && templates && templates.length > 0) {
+    if (!hasLoadedInitial && !templateId && templates && templates.length > 0) {
       const selected = templates.find((template) => template.isDefault) ?? templates[0];
       setTemplateId(selected.id);
       setName(selected.name);
@@ -786,8 +787,9 @@ function Compose() {
       setAttachments((selected as any).attachments || []);
       setStatus(selected.isDefault ? "Default template" : "Loaded");
       dirty.current = false;
+      setHasLoadedInitial(true);
     }
-  }, [editor, templateId, templates]);
+  }, [editor, templateId, templates, hasLoadedInitial]);
 
   const payload = React.useCallback(() => {
     const html = editor?.getHTML() ?? "";
