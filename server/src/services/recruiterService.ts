@@ -150,6 +150,9 @@ export async function deleteRecruiter(id: number) {
   const jobs = await db.select().from(emailQueue).where(eq(emailQueue.recruiterId, id));
   const draftIds = jobs.map((job) => job.draftId).filter((dId): dId is number => dId !== null);
 
+  // Log before deleting to avoid FK constraint violation on send_logs.recruiter_id
+  await createLog({ event: "recruiter.deleted", message: `Recruiter deleted (id=${id})` });
+
   // Delete the recruiter (cascades to email_queue in the database)
   await db.delete(recruiters).where(eq(recruiters.id, id));
 
@@ -157,8 +160,6 @@ export async function deleteRecruiter(id: number) {
   if (draftIds.length > 0) {
     await db.delete(emailDrafts).where(inArray(emailDrafts.id, draftIds));
   }
-
-  await createLog({ event: "recruiter.deleted", message: "Recruiter deleted", recruiterId: id });
 }
 
 type CsvRow = Record<string, string>;
