@@ -11,7 +11,8 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(4000),
   CLIENT_URL: z.string().url().default("http://localhost:5173"),
   LOG_LEVEL: z.string().default("info"),
-  GEMINI_API_KEY: z.string().optional()
+  GEMINI_API_KEY: z.string().optional(),
+  GEMINI_MODEL_NAME: z.string().default("gemini-3.1-flash-lite")
 });
 
 const parsed = envSchema.safeParse(process.env);

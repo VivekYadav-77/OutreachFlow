@@ -9,8 +9,8 @@ import { ValidationError } from "../utils/errors.js";
 export const coverLetterRoutes = Router();
 
 const generateSchema = z.object({
-  role: z.string().min(1, "Target role is required"),
-  company: z.string().min(1, "Target company is required"),
+  role: z.string().optional(),
+  company: z.string().optional(),
   tone: z.string().min(1, "Tone/style is required"),
   jobDescription: z.string().optional(),
   focusSkills: z.array(z.string()).optional()

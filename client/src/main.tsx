@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { BrowserRouter, NavLink, Route, Routes } from "react-router-dom";
+import { BrowserRouter, NavLink, Route, Routes, useNavigate, useLocation } from "react-router-dom";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import UnderlineExtension from "@tiptap/extension-underline";
@@ -873,6 +873,9 @@ function Compose() {
   const [cardAction, setCardAction] = React.useState<{ id: number; type: 'default' | 'delete' } | null>(null);
   const dirty = React.useRef(false);
 
+  const location = useLocation();
+  const stateTemplateId = location.state?.selectTemplateId;
+
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -895,18 +898,37 @@ function Compose() {
   });
 
   React.useEffect(() => {
-    if (!hasLoadedInitial && !templateId && templates && templates.length > 0) {
-      const selected = templates.find((template) => template.isDefault) ?? templates[0];
-      setTemplateId(selected.id);
-      setName(selected.name);
-      setSubject(selected.subjectTemplate);
-      editor?.commands.setContent(selected.htmlTemplate || "");
-      setAttachments((selected as any).attachments || []);
-      setStatus(selected.isDefault ? "Default template" : "Loaded");
-      dirty.current = false;
-      setHasLoadedInitial(true);
+    if (templates && templates.length > 0) {
+      // If a template ID was passed in location state (e.g. from Cover Letter generator), prioritize loading it
+      const targetId = stateTemplateId || (hasLoadedInitial ? templateId : null);
+      if (targetId) {
+        const selected = templates.find((t) => t.id === targetId);
+        if (selected && selected.id !== templateId) {
+          setTemplateId(selected.id);
+          setName(selected.name);
+          setSubject(selected.subjectTemplate);
+          editor?.commands.setContent(selected.htmlTemplate || "");
+          setAttachments((selected as any).attachments || []);
+          setStatus("Loaded from generator");
+          dirty.current = false;
+          setHasLoadedInitial(true);
+          return;
+        }
+      }
+
+      if (!hasLoadedInitial && !templateId) {
+        const selected = templates.find((template) => template.isDefault) ?? templates[0];
+        setTemplateId(selected.id);
+        setName(selected.name);
+        setSubject(selected.subjectTemplate);
+        editor?.commands.setContent(selected.htmlTemplate || "");
+        setAttachments((selected as any).attachments || []);
+        setStatus(selected.isDefault ? "Default template" : "Loaded");
+        dirty.current = false;
+        setHasLoadedInitial(true);
+      }
     }
-  }, [editor, templateId, templates, hasLoadedInitial]);
+  }, [editor, templateId, templates, hasLoadedInitial, stateTemplateId]);
 
   const payload = React.useCallback(() => {
     const html = editor?.getHTML() ?? "";
@@ -1978,6 +2000,8 @@ function CoverLetterGenerator() {
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState("");
   const [saveStatus, setSaveStatus] = React.useState("");
+  const [mode, setMode] = React.useState<"specific" | "general">("specific");
+  const navigate = useNavigate();
 
   const [form, setForm] = React.useState({
     role: "",
@@ -2053,8 +2077,8 @@ function CoverLetterGenerator() {
       const result = await api<{ subject: string; html: string }>("/api/cover-letter/generate", {
         method: "POST",
         body: JSON.stringify({
-          role: form.role,
-          company: form.company,
+          role: mode === "specific" ? form.role : undefined,
+          company: mode === "specific" ? form.company : undefined,
           tone: form.tone,
           jobDescription: form.jobDescription,
           focusSkills: skillsArray
@@ -2062,7 +2086,7 @@ function CoverLetterGenerator() {
       });
 
       setSubject(result.subject);
-      setSaveName(`Cover Letter - ${form.role} - ${form.company}`);
+      setSaveName(mode === "specific" ? `Cover Letter - ${form.role} - ${form.company}` : `General Cover Letter Template - ${form.tone}`);
       editor?.commands.setContent(result.html);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Generation failed. Check that GEMINI_API_KEY is configured.");
@@ -2081,7 +2105,7 @@ function CoverLetterGenerator() {
     setSaveStatus("Saving...");
     try {
       const html = editor.getHTML();
-      await api("/api/templates", {
+      const saved = await api<any>("/api/templates", {
         method: "POST",
         body: JSON.stringify({
           name: saveName,
@@ -2091,7 +2115,10 @@ function CoverLetterGenerator() {
           attachmentIds: []
         })
       });
-      setSaveStatus("Saved successfully!");
+      setSaveStatus("Saved successfully! Redirecting...");
+      setTimeout(() => {
+        navigate("/compose", { state: { selectTemplateId: saved.id } });
+      }, 1000);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to save template");
       setSaveStatus("Save failed");
@@ -2141,28 +2168,50 @@ function CoverLetterGenerator() {
           {/* Form Parameters */}
           <section className="panel" style={{ padding: "16px" }}>
             <h2 style={{ marginTop: 0, marginBottom: "16px", fontSize: "18px" }}>Generation Settings</h2>
-            <form className="stack" onSubmit={handleGenerate}>
-              <label htmlFor="gen-role">
-                <span>Target Job Role<span className="required-star">*</span></span>
-                <input
-                  id="gen-role"
-                  required
-                  placeholder="e.g. Senior React Developer"
-                  value={form.role}
-                  onChange={(e) => setForm({ ...form, role: e.target.value })}
-                />
-              </label>
+            
+            <div style={{ display: "flex", gap: "10px", marginBottom: "20px", background: "var(--sidebar-hover)", padding: "4px", borderRadius: "6px" }}>
+              <button
+                type="button"
+                style={{ flex: 1, minHeight: "32px", fontSize: "14px", background: mode === "specific" ? "var(--primary)" : "transparent", color: mode === "specific" ? "white" : "var(--sidebar-text-muted)", transition: "all 0.2s" }}
+                onClick={() => setMode("specific")}
+              >
+                Target Specific Job
+              </button>
+              <button
+                type="button"
+                style={{ flex: 1, minHeight: "32px", fontSize: "14px", background: mode === "general" ? "var(--primary)" : "transparent", color: mode === "general" ? "white" : "var(--sidebar-text-muted)", transition: "all 0.2s" }}
+                onClick={() => setMode("general")}
+              >
+                General Template
+              </button>
+            </div>
 
-              <label htmlFor="gen-company">
-                <span>Target Company Name<span className="required-star">*</span></span>
-                <input
-                  id="gen-company"
-                  required
-                  placeholder="e.g. Google"
-                  value={form.company}
-                  onChange={(e) => setForm({ ...form, company: e.target.value })}
-                />
-              </label>
+            <form className="stack" onSubmit={handleGenerate}>
+              {mode === "specific" && (
+                <>
+                  <label htmlFor="gen-role">
+                    <span>Target Job Role<span className="required-star">*</span></span>
+                    <input
+                      id="gen-role"
+                      required
+                      placeholder="e.g. Senior React Developer"
+                      value={form.role}
+                      onChange={(e) => setForm({ ...form, role: e.target.value })}
+                    />
+                  </label>
+
+                  <label htmlFor="gen-company">
+                    <span>Target Company Name<span className="required-star">*</span></span>
+                    <input
+                      id="gen-company"
+                      required
+                      placeholder="e.g. Google"
+                      value={form.company}
+                      onChange={(e) => setForm({ ...form, company: e.target.value })}
+                    />
+                  </label>
+                </>
+              )}
 
               <label htmlFor="gen-tone">
                 <span>Template Style / Tone<span className="required-star">*</span></span>
