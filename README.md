@@ -313,7 +313,7 @@ Open `server/.env` and fill in the following values:
 DATABASE_URL=postgres://postgres:YOUR_PASSWORD@localhost:5432/email_sender
 
 # Required for Gmail sending — from Google Cloud Console
-GOOGLE_CLIENT_ID=***REMOVED***
+GOOGLE_CLIENT_ID=yourcredentials
 GOOGLE_CLIENT_SECRET=GOCSPX-your-secret-here
 GOOGLE_REDIRECT_URI=http://localhost:4000/api/auth/callback
 

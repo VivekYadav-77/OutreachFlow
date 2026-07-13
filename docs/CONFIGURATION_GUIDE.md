@@ -110,14 +110,14 @@ postgres://postgres:YOUR_PASSWORD@localhost:5432/email_sender
 
 Replace `YOUR_PASSWORD` with the password you set during PostgreSQL installation.
 
-> **Example:** If your postgres password is `***REMOVED***`, the connection string is:
+> **Example:** If your postgres password is `yourcredentials`, the connection string is:
 > ```
-> postgres://postgres:***REMOVED***@localhost:5432/email_sender
+> postgres://postgres:yourcredentials@localhost:5432/email_sender
 > ```
 
 Put this value in `server/.env`:
 ```env
-DATABASE_URL=postgres://postgres:***REMOVED***@localhost:5432/email_sender
+DATABASE_URL=postgres://postgres:yourcredentials@localhost:5432/email_sender
 ```
 
 ### Running migrations
@@ -248,7 +248,7 @@ After creating the OAuth client, a dialog box appears showing:
 Copy both values and paste them into `server/.env`:
 
 ```env
-GOOGLE_CLIENT_ID=***REMOVED***
+GOOGLE_CLIENT_ID=yourcredentials
 GOOGLE_CLIENT_SECRET=GOCSPX-your-actual-secret-here
 GOOGLE_REDIRECT_URI=http://localhost:4000/api/auth/callback
 ```

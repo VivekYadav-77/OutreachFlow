@@ -68,7 +68,7 @@ postgres://USERNAME:PASSWORD@HOST:PORT/DATABASE_NAME
 
 **Example value:**
 ```env
-DATABASE_URL=postgres://postgres:***REMOVED***@localhost:5432/email_sender
+DATABASE_URL=postgres://postgres:yourcredentials@localhost:5432/email_sender
 ```
 
 **Where to get it:**
@@ -98,7 +98,7 @@ A long string ending in `.apps.googleusercontent.com`
 
 **Example value:**
 ```env
-GOOGLE_CLIENT_ID=***REMOVED***
+GOOGLE_CLIENT_ID=yourcredentials
 ```
 
 **Where to get it:**
