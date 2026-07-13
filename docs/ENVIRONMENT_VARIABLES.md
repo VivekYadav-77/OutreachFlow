@@ -264,7 +264,7 @@ A string starting with `AIzaSy...`
 
 **Example value:**
 ```env
-GEMINI_API_KEY=***REMOVED***
+GEMINI_API_KEY=your-gemini-api-key-here
 ```
 
 **Where to get it:**

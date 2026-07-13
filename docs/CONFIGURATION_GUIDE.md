@@ -344,7 +344,7 @@ The Cover Letter Generator works like this:
 1. Click **"Get API key"** in the left sidebar — or go directly to [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey)
 2. Click the blue **"Create API key"** button
 3. Choose **"Create API key in new project"** (this creates a separate Google Cloud project just for the API key, which keeps things clean)
-4. Your API key will be generated and displayed — it looks like: `***REMOVED***`
+4. Your API key will be generated and displayed — it looks like: `AIzaSy...`
 
 ---
 
@@ -353,7 +353,7 @@ The Cover Letter Generator works like this:
 Open `server/.env` and set:
 
 ```env
-GEMINI_API_KEY=***REMOVED***
+GEMINI_API_KEY=your-gemini-api-key-here
 ```
 
 Optionally, you can also set the model name (the default is usually the best choice):
