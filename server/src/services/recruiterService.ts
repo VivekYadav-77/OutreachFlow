@@ -68,20 +68,18 @@ export async function updateRecruiter(id: number, input: Partial<z.infer<typeof 
   await getRecruiter(id);
   const settings = await getSettings();
 
-  // If worker is running, block editing if the recruiter has any active queue jobs
-  if (settings.workerStatus === "running") {
-    const activeJobs = await db
-      .select()
-      .from(emailQueue)
-      .where(
-        and(
-          eq(emailQueue.recruiterId, id),
-          inArray(emailQueue.state, ["Pending", "Sending", "Retrying"])
-        )
-      );
-    if (activeJobs.length > 0) {
-      throw new ValidationError("Cannot edit recruiter info while the worker is actively running and this recruiter has an active job in the queue. Please pause or stop the worker first.");
-    }
+  // Block editing if the recruiter has any queue jobs currently being sent
+  const activeJobs = await db
+    .select()
+    .from(emailQueue)
+    .where(
+      and(
+        eq(emailQueue.recruiterId, id),
+        eq(emailQueue.state, "Sending")
+      )
+    );
+  if (activeJobs.length > 0) {
+    throw new ValidationError("Cannot edit recruiter info while an email is actively being sent to them.");
   }
 
   const parsed = recruiterSchema.partial().parse(input);
@@ -141,20 +139,18 @@ export async function deleteRecruiter(id: number) {
   await getRecruiter(id);
   const settings = await getSettings();
 
-  // If worker is running, block deleting if the recruiter has any active queue jobs
-  if (settings.workerStatus === "running") {
-    const activeJobs = await db
-      .select()
-      .from(emailQueue)
-      .where(
-        and(
-          eq(emailQueue.recruiterId, id),
-          inArray(emailQueue.state, ["Pending", "Sending", "Retrying"])
-        )
-      );
-    if (activeJobs.length > 0) {
-      throw new ValidationError("Cannot delete recruiter while the worker is actively running and this recruiter has an active job in the queue. Please pause or stop the worker first.");
-    }
+  // Block deleting if the recruiter has any queue jobs currently being sent
+  const activeJobs = await db
+    .select()
+    .from(emailQueue)
+    .where(
+      and(
+        eq(emailQueue.recruiterId, id),
+        eq(emailQueue.state, "Sending")
+      )
+    );
+  if (activeJobs.length > 0) {
+    throw new ValidationError("Cannot delete recruiter while an email is actively being sent to them.");
   }
 
   // Find all drafts associated with this recruiter's queue jobs to clean them up
