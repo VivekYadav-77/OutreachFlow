@@ -3,6 +3,9 @@ import { NavLink } from "react-router-dom";
 import { AlertTriangle, Pencil, RefreshCw, Trash2, X } from "lucide-react";
 import { api, useApi, API_URL } from "../api/client";
 import { Page } from "../components/Page";
+import { useToast } from "../context/ToastContext";
+import { ConfirmModal } from "../components/ConfirmModal";
+import { Spinner } from "../components/Spinner";
 import type { Recruiter, Template, ImportResult } from "../types";
 
 export function Recruiters() {
@@ -12,6 +15,8 @@ export function Recruiters() {
   const { data: templates } = useApi<Template[]>("/api/templates", refresh);
   const defaultTemplate = templates?.find((template) => template.isDefault) ?? templates?.[0];
   const [form, setForm] = React.useState({ fullName: "", company: "", email: "", designation: "", notes: "", templateId: "" });
+  const toast = useToast();
+  const [recruiterToDelete, setRecruiterToDelete] = React.useState<Recruiter | null>(null);
 
   // State for Loading and Editing
   const [isSubmitting, setIsSubmitting] = React.useState(false);
@@ -37,7 +42,7 @@ export function Recruiters() {
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!form.templateId) {
-      alert("Please select a template first.");
+      toast.warning("Please select a template first.");
       return;
     }
     setIsSubmitting(true);
@@ -45,8 +50,9 @@ export function Recruiters() {
       await api("/api/recruiters", { method: "POST", body: JSON.stringify({ ...form, templateId: Number(form.templateId) }) });
       setForm({ fullName: "", company: "", email: "", designation: "", notes: "", templateId: defaultTemplate ? String(defaultTemplate.id) : "" });
       setRefresh((value) => value + 1);
+      toast.success("Recruiter added successfully");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to add recruiter");
+      toast.error(err instanceof Error ? err.message : "Failed to add recruiter");
     } finally {
       setIsSubmitting(false);
     }
@@ -78,6 +84,7 @@ export function Recruiters() {
       });
       setEditingRecruiter(null);
       setRefresh((value) => value + 1);
+      toast.success("Recruiter updated successfully");
     } catch (err) {
       setEditError(err instanceof Error ? err.message : "Failed to update recruiter");
     } finally {
@@ -85,14 +92,17 @@ export function Recruiters() {
     }
   };
 
-  const handleDelete = async (id: number) => {
-    if (!window.confirm("Are you sure you want to delete this recruiter?")) return;
+  const confirmDelete = async () => {
+    if (!recruiterToDelete) return;
+    const id = recruiterToDelete.id;
     setDeletingId(id);
+    setRecruiterToDelete(null);
     try {
       await api(`/api/recruiters/${id}`, { method: "DELETE" });
       setRefresh((value) => value + 1);
+      toast.success("Recruiter deleted successfully");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to delete recruiter");
+      toast.error(err instanceof Error ? err.message : "Failed to delete recruiter");
     } finally {
       setDeletingId(null);
     }
@@ -109,7 +119,7 @@ export function Recruiters() {
       setRefresh((value) => value + 1);
     } catch (err) {
       // Server-thrown errors (e.g. wrong column names) surface here as a clear message
-      alert(err instanceof Error ? err.message : "Failed to import CSV");
+      toast.error(err instanceof Error ? err.message : "Failed to import CSV");
     } finally {
       setIsImporting(false);
       // Reset file input so the same file can be re-selected after fixing it
@@ -127,7 +137,7 @@ export function Recruiters() {
           <label className={`button secondary ${isImporting ? "disabled" : ""}`}>
             {isImporting ? (
               <>
-                <RefreshCw size={14} className="refresh-spin" />
+                <Spinner size={14} />
                 Importing CSV...
               </>
             ) : (
@@ -214,7 +224,7 @@ export function Recruiters() {
           </label>
           <div className="form-submit-container">
             <button disabled={!hasTemplates || isSubmitting}>
-              {isSubmitting && <RefreshCw size={14} className="refresh-spin" />}
+              {isSubmitting && <Spinner size={14} />}
               Add Recruiter
             </button>
           </div>
@@ -261,9 +271,9 @@ export function Recruiters() {
                       className="action-btn danger"
                       title="Delete Recruiter"
                       disabled={deletingId !== null}
-                      onClick={() => handleDelete(row.id)}
+                      onClick={() => setRecruiterToDelete(row)}
                     >
-                      {deletingId === row.id ? <RefreshCw size={14} className="refresh-spin" /> : <Trash2 size={14} />}
+                      {deletingId === row.id ? <Spinner size={14} /> : <Trash2 size={14} />}
                     </button>
                   </div>
                 </td>
@@ -318,7 +328,7 @@ export function Recruiters() {
                 </label>
                 <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
                   <button type="submit" disabled={editSubmitting}>
-                    {editSubmitting && <RefreshCw size={14} className="refresh-spin" />}
+                    {editSubmitting && <Spinner size={14} />}
                     Save Changes
                   </button>
                   <button type="button" className="secondary" disabled={editSubmitting} onClick={() => setEditingRecruiter(null)}>Cancel</button>
@@ -395,6 +405,16 @@ export function Recruiters() {
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={!!recruiterToDelete}
+        title="Delete Recruiter"
+        message={`Are you sure you want to delete ${recruiterToDelete?.fullName}? This action cannot be undone.`}
+        onConfirm={confirmDelete}
+        onCancel={() => setRecruiterToDelete(null)}
+        confirmText="Delete"
+        isDestructive={true}
+      />
     </Page>
   );
 }

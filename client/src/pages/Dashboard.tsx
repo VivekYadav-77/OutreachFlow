@@ -15,12 +15,15 @@ import { api, useApi } from "../api/client";
 import { Page } from "../components/Page";
 import { StatCard } from "../components/StatCard";
 import { GoogleAuthStatus } from "../components/GoogleAuthStatus";
+import { useToast } from "../context/ToastContext";
+import { Spinner } from "../components/Spinner";
 import type { Stats, QueueItem } from "../types";
 
 export function Dashboard() {
   const [refresh, setRefresh] = React.useState(0);
   const { data, error } = useApi<Stats>("/api/statistics", refresh);
   const [actionLoading, setActionLoading] = React.useState<string | null>(null);
+  const toast = useToast();
 
   const [searchQuery, setSearchQuery] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState("");
@@ -36,8 +39,9 @@ export function Dashboard() {
     try {
       await api(path, { method: "POST" });
       setRefresh((value) => value + 1);
+      toast.success("Action executed successfully");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Action failed");
+      toast.error(err instanceof Error ? err.message : "Action failed");
     } finally {
       setActionLoading(null);
     }
@@ -119,23 +123,23 @@ export function Dashboard() {
       <section className="panel">
         <div className="toolbar">
           <button disabled={actionLoading !== null} onClick={() => action("/api/queue/start")}>
-            {actionLoading === "/api/queue/start" && <RefreshCw size={14} className="refresh-spin" />}
+            {actionLoading === "/api/queue/start" && <Spinner size={14} />}
             Start
           </button>
           <button disabled={actionLoading !== null} onClick={() => action("/api/queue/pause")}>
-            {actionLoading === "/api/queue/pause" && <RefreshCw size={14} className="refresh-spin" />}
+            {actionLoading === "/api/queue/pause" && <Spinner size={14} />}
             Pause
           </button>
           <button disabled={actionLoading !== null} onClick={() => action("/api/queue/resume")}>
-            {actionLoading === "/api/queue/resume" && <RefreshCw size={14} className="refresh-spin" />}
+            {actionLoading === "/api/queue/resume" && <Spinner size={14} />}
             Resume
           </button>
           <button disabled={actionLoading !== null} onClick={() => action("/api/queue/stop")}>
-            {actionLoading === "/api/queue/stop" && <RefreshCw size={14} className="refresh-spin" />}
+            {actionLoading === "/api/queue/stop" && <Spinner size={14} />}
             Stop
           </button>
           <button disabled={actionLoading !== null} onClick={() => action("/api/queue/retry-failed")}>
-            {actionLoading === "/api/queue/retry-failed" && <RefreshCw size={14} className="refresh-spin" />}
+            {actionLoading === "/api/queue/retry-failed" && <Spinner size={14} />}
             Retry Failed
           </button>
         </div>

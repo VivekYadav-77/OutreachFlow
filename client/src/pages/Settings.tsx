@@ -3,6 +3,8 @@ import { AlertTriangle, RefreshCw, SlidersHorizontal, X, XCircle } from "lucide-
 import { api, useApi } from "../api/client";
 import { Page } from "../components/Page";
 import { GoogleAuthStatus } from "../components/GoogleAuthStatus";
+import { useToast } from "../context/ToastContext";
+import { Spinner } from "../components/Spinner";
 
 const SETTING_METADATA: Record<string, {
   title: string;
@@ -363,6 +365,7 @@ export function SettingsPage() {
   const [form, setForm] = React.useState<Record<string, unknown>>({});
   const [isGuidelinesOpen, setIsGuidelinesOpen] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
+  const toast = useToast();
   const [modalState, setModalState] = React.useState<{ isOpen: boolean; key: string; value: string }>({
     isOpen: false,
     key: "",
@@ -389,7 +392,7 @@ export function SettingsPage() {
     const minDelay = Number(form.minDelaySeconds);
     const maxDelay = Number(form.maxDelaySeconds);
     if (minDelay > maxDelay) {
-      alert("Validation Error: Minimum delay cannot exceed maximum delay.");
+      toast.error("Validation Error: Minimum delay cannot exceed maximum delay.");
       return;
     }
 
@@ -397,8 +400,9 @@ export function SettingsPage() {
     try {
       await api("/api/settings", { method: "PUT", body: JSON.stringify(form) });
       setRefresh((value) => value + 1);
+      toast.success("Settings saved successfully");
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to save settings");
+      toast.error(err instanceof Error ? err.message : "Failed to save settings");
     } finally {
       setIsSaving(false);
     }
@@ -517,7 +521,7 @@ export function SettingsPage() {
           </div>
 
           <button style={{ marginTop: '16px' }} disabled={isSaving}>
-            {isSaving && <RefreshCw size={14} className="refresh-spin" />}
+            {isSaving && <Spinner size={14} />}
             Save Settings
           </button>
         </form>

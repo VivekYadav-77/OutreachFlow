@@ -14,6 +14,8 @@ import { api, useApi } from "../api/client";
 import { Page } from "../components/Page";
 import { ComposerToolbar } from "../components/ComposerToolbar";
 import { GoogleAuthStatus } from "../components/GoogleAuthStatus";
+import { useToast } from "../context/ToastContext";
+import { ConfirmModal } from "../components/ConfirmModal";
 import type { Template } from "../types";
 
 function emailTextFromHtml(html: string) {
@@ -39,6 +41,8 @@ export function Compose() {
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [cardAction, setCardAction] = React.useState<{ id: number; type: 'default' | 'delete' } | null>(null);
   const dirty = React.useRef(false);
+  const toast = useToast();
+  const [templateToDelete, setTemplateToDelete] = React.useState<number | null>(null);
 
   const location = useLocation();
   const stateTemplateId = location.state?.selectTemplateId;
@@ -190,18 +194,9 @@ export function Compose() {
     }
   };
 
-  const removeTemplate = async () => {
-    if (!templateId || !window.confirm("Delete this template?")) return;
-    setIsDeleting(true);
-    try {
-      await api(`/api/templates/${templateId}`, { method: "DELETE" });
-      newTemplate();
-      setRefresh((value) => value + 1);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete template");
-    } finally {
-      setIsDeleting(false);
-    }
+  const removeTemplate = () => {
+    if (!templateId) return;
+    setTemplateToDelete(templateId);
   };
 
   const setDefaultFromList = async (id: number, event: React.MouseEvent) => {
@@ -220,20 +215,31 @@ export function Compose() {
     }
   };
 
-  const deleteFromList = async (id: number, event: React.MouseEvent) => {
+  const deleteFromList = (id: number, event: React.MouseEvent) => {
     event.stopPropagation();
-    if (!window.confirm("Delete this template?")) return;
-    setCardAction({ id, type: 'delete' });
+    setTemplateToDelete(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!templateToDelete) return;
+    setIsDeleting(true);
+    setCardAction({ id: templateToDelete, type: 'delete' });
     try {
-      await api(`/api/templates/${id}`, { method: "DELETE" });
-      if (templateId === id) {
+      await api(`/api/templates/${templateToDelete}`, { method: "DELETE" });
+      if (templateId === templateToDelete) {
         newTemplate();
       }
       setRefresh((value) => value + 1);
+      toast.success("Template deleted successfully");
+      setError("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to delete template");
+      const msg = err instanceof Error ? err.message : "Failed to delete template";
+      setError(msg);
+      toast.error(msg);
     } finally {
+      setIsDeleting(false);
       setCardAction(null);
+      setTemplateToDelete(null);
     }
   };
 
@@ -410,6 +416,15 @@ export function Compose() {
           </div>
         </aside>
       </div>
+      <ConfirmModal
+        isOpen={!!templateToDelete}
+        title="Delete Template"
+        message="Are you sure you want to delete this template? This action cannot be undone."
+        onConfirm={confirmDelete}
+        onCancel={() => setTemplateToDelete(null)}
+        confirmText="Delete"
+        isDestructive={true}
+      />
     </Page>
   );
 }
