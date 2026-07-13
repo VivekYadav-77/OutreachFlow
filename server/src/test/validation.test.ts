@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { recruiterSchema } from "./recruiterService.js";
-import { settingsSchema } from "./settingsService.js";
+import { recruiterSchema } from "../services/recruiterService.js";
+import { settingsSchema } from "../services/settingsService.js";
 
 describe("validation", () => {
   it("normalizes recruiter emails", () => {

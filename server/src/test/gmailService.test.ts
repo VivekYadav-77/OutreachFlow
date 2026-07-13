@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { classifyGmailError, createMimeMessage } from "./gmailService.js";
+import { classifyGmailError, createMimeMessage } from "../gmail/gmailService.js";
 
 describe("gmailService", () => {
   it("creates a MIME message with HTML, text, and optional attachment", async () => {

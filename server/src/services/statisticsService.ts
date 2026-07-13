@@ -1,4 +1,4 @@
-import { count, eq, sql } from "drizzle-orm";
+import { count, eq, sql, desc } from "drizzle-orm";
 import { db } from "../database/db.js";
 import { dailyStats, emailQueue, recruiters } from "../database/schema.js";
 import { getQueueSummary } from "../queue/queueService.js";
@@ -22,6 +22,25 @@ export async function getStatistics() {
   const daysRemaining = settings.dailyLimit > 0 ? Math.ceil(pending / settings.dailyLimit) : 0;
   const completion = new Date();
   completion.setDate(completion.getDate() + daysRemaining);
+
+  const queueItems = await db
+    .select({
+      id: emailQueue.id,
+      state: emailQueue.state,
+      attempts: emailQueue.attempts,
+      lastError: emailQueue.lastError,
+      nextAttemptAt: emailQueue.nextAttemptAt,
+      sentAt: emailQueue.sentAt,
+      updatedAt: emailQueue.updatedAt,
+      recruiterName: recruiters.fullName,
+      recruiterCompany: recruiters.company,
+      recruiterEmail: recruiters.email
+    })
+    .from(emailQueue)
+    .leftJoin(recruiters, eq(emailQueue.recruiterId, recruiters.id))
+    .orderBy(desc(emailQueue.updatedAt))
+    .limit(500);
+
   return {
     todaySent: today?.sentCount ?? 0,
     totalSent,
@@ -33,6 +52,7 @@ export async function getStatistics() {
     remainingRecruiters: pending,
     estimatedCompletionDate: pending ? completion.toISOString().slice(0, 10) : null,
     workerStatus: settings.workerStatus,
-    queue: await getQueueSummary()
+    queue: await getQueueSummary(),
+    queueItems
   };
 }

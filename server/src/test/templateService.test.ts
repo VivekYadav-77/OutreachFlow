@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { renderTemplate } from "./templateService.js";
+import { renderTemplate } from "../services/templateService.js";
 
 describe("renderTemplate", () => {
   it("replaces supported recruiter placeholders", () => {

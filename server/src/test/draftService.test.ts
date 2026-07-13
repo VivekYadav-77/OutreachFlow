@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { draftSchema } from "./draftService.js";
+import { draftSchema } from "../services/draftService.js";
 
 describe("draftSchema", () => {
   it("normalizes recipient addresses", () => {

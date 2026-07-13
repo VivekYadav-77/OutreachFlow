@@ -1689,3 +1689,216 @@ th {
   background: var(--bg-body);
 }
 
+
+/* ── Queue Dashboard Section ────────────────────────────────────────────────── */
+.queue-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.queue-progress-bar-container {
+  display: flex;
+  height: 10px;
+  background-color: var(--border-lighter);
+  border-radius: 5px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.queue-progress-segment {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.queue-progress-segment.sent { background-color: #22c55e; }
+.queue-progress-segment.sending { background-color: #3b82f6; }
+.queue-progress-segment.retrying { background-color: #f59e0b; }
+.queue-progress-segment.failed { background-color: #ef4444; }
+.queue-progress-segment.paused { background-color: #64748b; }
+.queue-progress-segment.pending { background-color: #cbd5e1; }
+
+.queue-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.queue-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--bg-body);
+  border: 1px solid var(--border-light);
+  transition: all 0.2s ease;
+}
+
+.queue-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px var(--shadow-color);
+}
+
+.queue-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.queue-card-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.queue-card-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.queue-card-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+/* Card variants colors */
+.queue-card.sent .queue-card-icon {
+  background-color: var(--success-bg);
+  color: var(--success-text);
+}
+.queue-card.sending .queue-card-icon {
+  background-color: var(--info-bg);
+  color: var(--info-text);
+  animation: pulse 2s infinite;
+}
+.queue-card.retrying .queue-card-icon {
+  background-color: var(--warning-light-bg);
+  color: var(--warning-text);
+}
+.queue-card.failed .queue-card-icon {
+  background-color: var(--error-bg);
+  color: var(--error-text);
+}
+.queue-card.paused .queue-card-icon {
+  background-color: var(--config-bg);
+  color: var(--config-text);
+}
+.queue-card.pending .queue-card-icon {
+  background-color: var(--border-lighter);
+  color: var(--text-muted);
+}
+
+/* Empty state styling */
+.queue-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.queue-empty-icon {
+  margin-bottom: 12px;
+  color: var(--border);
+}
+
+.queue-empty-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text-main);
+  margin-bottom: 4px;
+}
+
+.queue-empty-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  max-width: 400px;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+
+/* ── General Status Badge Styles ────────────────────────────────────────────── */
+.status-pending,
+.status-sending,
+.status-sent,
+.status-failed,
+.status-retrying,
+.status-paused,
+.status-replied,
+.status-skipped {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+}
+
+.status-pending {
+  background-color: var(--border-lighter);
+  color: var(--text-muted);
+  border-color: var(--border-light);
+}
+
+.status-sending {
+  background-color: var(--info-bg);
+  color: var(--info-text);
+  border-color: var(--info-border);
+}
+
+.status-sent {
+  background-color: var(--success-bg);
+  color: var(--success-text);
+  border-color: var(--success-border);
+}
+
+.status-failed {
+  background-color: var(--error-bg);
+  color: var(--error-text);
+  border-color: var(--error-border);
+}
+
+.status-retrying {
+  background-color: var(--warning-light-bg);
+  color: var(--warning-text);
+  border-color: var(--banner-border);
+}
+
+.status-paused {
+  background-color: var(--config-bg);
+  color: var(--config-text);
+  border-color: var(--config-border);
+}
+
+.status-replied {
+  background-color: var(--primary-light);
+  color: var(--primary-dark);
+  border-color: var(--info-border);
+}
+
+.status-skipped {
+  background-color: var(--border-lighter);
+  color: var(--note-text);
+  border-color: var(--border);
+}
+
+
+
