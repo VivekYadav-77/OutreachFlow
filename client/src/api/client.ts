@@ -16,9 +16,26 @@ export function useApi<T>(path: string, refresh = 0) {
   const [data, setData] = React.useState<T | null>(null);
   const [error, setError] = React.useState("");
   const [loading, setLoading] = React.useState(true);
+  const mutate = React.useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const value = await api<T>(path);
+      setData(value);
+      return value;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Request failed";
+      setError(message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, [path]);
+
   React.useEffect(() => {
     let active = true;
     setLoading(true);
+    setError("");
     api<T>(path)
       .then((value) => active && setData(value))
       .catch((err: Error) => active && setError(err.message))
@@ -27,5 +44,5 @@ export function useApi<T>(path: string, refresh = 0) {
       active = false;
     };
   }, [path, refresh]);
-  return { data, error, loading };
+  return { data, error, loading, mutate };
 }

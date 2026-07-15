@@ -108,7 +108,7 @@ export function Recruiters() {
     }
   };
 
-  const importCsv = async (file?: File) => {
+  const importRecruiterFile = async (file?: File) => {
     if (!file) return;
     setIsImporting(true);
     try {
@@ -119,7 +119,7 @@ export function Recruiters() {
       setRefresh((value) => value + 1);
     } catch (err) {
       // Server-thrown errors (e.g. wrong column names) surface here as a clear message
-      toast.error(err instanceof Error ? err.message : "Failed to import CSV");
+      toast.error(err instanceof Error ? err.message : "Failed to import file");
     } finally {
       setIsImporting(false);
       // Reset file input so the same file can be re-selected after fixing it
@@ -138,19 +138,19 @@ export function Recruiters() {
             {isImporting ? (
               <>
                 <Spinner size={14} />
-                Importing CSV...
+                Importing file...
               </>
             ) : (
-              "Import CSV"
+              "Import CSV / Excel"
             )}
-            <input ref={fileInputRef} hidden type="file" accept=".csv,text/csv" disabled={isImporting} onChange={(event) => importCsv(event.target.files?.[0])} />
+            <input ref={fileInputRef} hidden type="file" accept=".csv,text/csv,.xlsx,.xls" disabled={isImporting} onChange={(event) => importRecruiterFile(event.target.files?.[0])} />
           </label>
         </div>
         <div className="csv-format-hint">
-          <span>Required columns:</span>
-          <code>fullName</code><code>company</code><code>email</code>
-          <span className="csv-hint-sep">·  Optional:</span>
-          <code>designation</code><code>linkedin</code><code>notes</code>
+          <span>CSV or Excel headers:</span>
+          <code>Name</code><code>Title</code><code>Company</code><code>Email</code>
+          <span className="csv-hint-sep">·  Also accepts:</span>
+          <code>fullName</code><code>designation</code><code>linkedin</code><code>notes</code>
         </div>
 
         {!hasTemplates && (

@@ -47,7 +47,7 @@ Think of it as a lightweight, privacy-first alternative to tools like Mailchimp 
 
 ## 2. Features
 
-- **Recruiter/Contact Management** — Add, edit, and organize contacts manually or by importing a CSV file. Track outreach status per contact (`Pending`, `Sent`, `Replied`, `Failed`, `Skipped`).
+- **Recruiter/Contact Management** — Add, edit, and organize contacts manually or by importing a CSV or Excel file. Track outreach status per contact (`Pending`, `Sent`, `Replied`, `Failed`, `Skipped`).
 - **Rich-Text Email Composer** — Write emails with a full WYSIWYG editor (bold, italic, links, images, headings, lists). Supports CC, BCC, and file attachments.
 - **Email Templates** — Create reusable email templates with Handlebars-style placeholders (`{{fullName}}`, `{{company}}`, `{{designation}}`) that get personalized for each recipient automatically.
 - **Campaign Management** — Group contacts into campaigns with custom sending windows, daily limits, and retry logic.
@@ -126,6 +126,7 @@ Think of it as a lightweight, privacy-first alternative to tools like Mailchimp 
 | `multer` | — | File upload handling |
 | `pdf-parse` | — | PDF text extraction |
 | `@fast-csv` | — | CSV import/export |
+| `xlsx` | — | Excel recruiter import |
 | `pino` | — | Structured logging |
 | `node-cron` | — | Background job scheduler |
 | `zod` | — | Environment variable validation |
@@ -476,7 +477,7 @@ The main overview page. Shows:
 
 Manage your contacts here. You can:
 - Add contacts one by one with a form
-- Import a CSV file (see `testing_recruiters.csv` for the expected format)
+- Import a CSV or Excel file with common headers like `Name`, `Title`, `Company`, and `Email`
 - Export your contacts to CSV
 - View per-contact send status
 - Filter by status (`Pending`, `Sent`, `Replied`, etc.)
@@ -674,7 +675,7 @@ A: This means the template placeholder wasn't replaced. Make sure the recruiter 
 
 **Q: How do I import recruiters from a spreadsheet?**
 
-A: Export your spreadsheet as a CSV file (File → Save As → CSV in Excel or Google Sheets). The expected columns are: `fullName`, `company`, `designation`, `email`, `linkedin`. See `testing_recruiters.csv` in the project root for an example. Then go to Recruiters → Import CSV.
+A: Upload a CSV, `.xlsx`, or `.xls` file directly from the Recruiters page. Exact headers are not required: the importer recognizes common alternatives like `Name` or `Full Name`, `Title` or `Job Title`, `Company` or `Company Name`, and `Email`, `Email ID`, or `Email Address`. It also still accepts the canonical headers `fullName`, `company`, `email`, with optional `designation`, `linkedin`, and `notes`.
 
 ---
 

@@ -1,6 +1,7 @@
 import { format } from "@fast-csv/format";
 import { parseString } from "@fast-csv/parse";
 import { and, asc, count, desc, eq, ilike, or, inArray, ne } from "drizzle-orm";
+import * as XLSX from "xlsx";
 import { z } from "zod";
 import { db } from "../database/db.js";
 import { recruiters, emailQueue, emailDrafts, emailDraftAttachments } from "../database/schema.js";
@@ -175,33 +176,108 @@ export const CSV_OPTIONAL_COLUMNS = ["designation", "linkedin", "notes"] as cons
 
 type CsvRow = Record<string, string>;
 type CsvImportError = { row: number; reason: string };
+type RecruiterImportField = typeof CSV_REQUIRED_COLUMNS[number] | typeof CSV_OPTIONAL_COLUMNS[number];
 
 const MAX_ROW_ERRORS = 10;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export async function importRecruitersFromCsv(csv: string) {
-  const rows = await new Promise<CsvRow[]>((resolve, reject) => {
-    const output: CsvRow[] = [];
-    parseString(csv, { headers: true, trim: true })
-      .on("error", reject)
-      .on("data", (row) => output.push(row))
-      .on("end", () => resolve(output));
+const FIELD_ALIASES: Record<RecruiterImportField, string[]> = {
+  fullName: ["fullName", "full name", "name", "contact name", "candidate name", "hr name"],
+  company: ["company", "company name", "organization", "organisation"],
+  email: ["email", "email id", "email address", "mail", "mail id"],
+  designation: ["designation", "title", "job title", "position", "role"],
+  linkedin: ["linkedin", "linkedin url", "profile", "linkedin profile"],
+  notes: ["notes", "remarks", "comment", "comments"]
+};
+
+function normalizeHeader(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+const NORMALIZED_FIELD_ALIASES = Object.fromEntries(
+  Object.entries(FIELD_ALIASES).map(([field, aliases]) => [field, aliases.map(normalizeHeader)])
+) as Record<RecruiterImportField, string[]>;
+
+function findFieldForHeader(header: string): RecruiterImportField | undefined {
+  const normalized = normalizeHeader(header);
+  return (Object.keys(NORMALIZED_FIELD_ALIASES) as RecruiterImportField[]).find((field) => NORMALIZED_FIELD_ALIASES[field].includes(normalized));
+}
+
+function findLikelyEmailHeader(rows: CsvRow[], mappedHeaders: Set<string>) {
+  const headers = Object.keys(rows[0] ?? {});
+  return headers.find((header) => {
+    if (mappedHeaders.has(header)) return false;
+    const sampledValues = rows.slice(0, 25).map((row) => row[header]?.trim()).filter(Boolean);
+    return sampledValues.length > 0 && sampledValues.some((value) => EMAIL_PATTERN.test(value));
   });
+}
 
-  // ── Header-level structural check ────────────────────────────────────────────
-  // If the CSV has rows but is missing required column names entirely, fail fast
-  // with a clear, actionable error message instead of silently skipping everything.
-  if (rows.length > 0) {
-    const firstRow = rows[0];
-    const missingColumns = CSV_REQUIRED_COLUMNS.filter((col) => !(col in firstRow));
-    if (missingColumns.length > 0) {
-      throw new ValidationError(
-        `CSV is missing required columns: ${missingColumns.join(", ")}. ` +
-        `Required: ${CSV_REQUIRED_COLUMNS.join(", ")}. ` +
-        `Optional: ${CSV_OPTIONAL_COLUMNS.join(", ")}.`
-      );
+function normalizeImportRows(rows: CsvRow[], sourceLabel: "CSV" | "Excel") {
+  if (rows.length === 0) return rows;
+
+  const headers = Object.keys(rows[0]);
+  const mappedHeaders = new Set<string>();
+  const fieldToHeader = new Map<RecruiterImportField, string>();
+
+  for (const header of headers) {
+    const field = findFieldForHeader(header);
+    if (!field || fieldToHeader.has(field)) continue;
+    fieldToHeader.set(field, header);
+    mappedHeaders.add(header);
+  }
+
+  if (!fieldToHeader.has("email")) {
+    const emailHeader = findLikelyEmailHeader(rows, mappedHeaders);
+    if (emailHeader) {
+      fieldToHeader.set("email", emailHeader);
+      mappedHeaders.add(emailHeader);
     }
   }
 
+  if (!fieldToHeader.has("notes")) {
+    const categoryHeader = headers.find((header) => normalizeHeader(header) === "category");
+    if (categoryHeader) fieldToHeader.set("notes", categoryHeader);
+  }
+
+  if (!fieldToHeader.has("email")) {
+    throw new ValidationError(`${sourceLabel} does not include a recognizable email column. Use a header like email, email id, email address, mail, or mail id.`);
+  }
+  if (!fieldToHeader.has("fullName") && !fieldToHeader.has("company")) {
+    throw new ValidationError(`${sourceLabel} does not include recognizable contact columns. Use headers like name/full name and company/company name.`);
+  }
+
+  return rows.map((row) => {
+    const normalizedRow: CsvRow = {};
+    for (const [field, header] of fieldToHeader) {
+      normalizedRow[field] = row[header]?.trim() ?? "";
+    }
+    return normalizedRow;
+  });
+}
+
+export async function importRecruitersFromExcel(buffer: Buffer) {
+  const workbook = XLSX.read(buffer, { type: "buffer" });
+  const firstSheetName = workbook.SheetNames[0];
+  if (!firstSheetName) return importRecruitersFromRows([], "Excel");
+
+  const sheet = workbook.Sheets[firstSheetName];
+  const table = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "", blankrows: false, raw: false });
+  if (table.length === 0) return importRecruitersFromRows([], "Excel");
+
+  const headers = table[0].map((cell) => String(cell ?? "").trim());
+  const rows = table.slice(1).map((cells) => {
+    const row: CsvRow = {};
+    headers.forEach((header, index) => {
+      if (!header) return;
+      row[header] = String(cells[index] ?? "").trim();
+    });
+    return row;
+  });
+
+  return importRecruitersFromRows(normalizeImportRows(rows, "Excel"), "Excel");
+}
+
+export async function importRecruitersFromRows(rows: CsvRow[], sourceLabel: "CSV" | "Excel" = "CSV") {
   const defaultTemplate = await getDefaultTemplate().catch(() => null);
   const seen = new Set<string>();
   const summary = {
@@ -214,7 +290,7 @@ export async function importRecruitersFromCsv(csv: string) {
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const rowNumber = i + 1; // 1-indexed for human readability
+    const rowNumber = i + 1;
 
     if (!CSV_REQUIRED_COLUMNS.every((key) => key in row && row[key].trim() !== "")) {
       if (summary.errors.length < MAX_ROW_ERRORS) {
@@ -258,8 +334,19 @@ export async function importRecruitersFromCsv(csv: string) {
     }
   }
 
-  await createLog({ event: "recruiter.imported", message: "CSV import completed", metadata: { imported: summary.imported, duplicates: summary.duplicates, invalid: summary.invalid, skipped: summary.skipped } });
+  await createLog({ event: "recruiter.imported", message: `${sourceLabel} import completed`, metadata: { imported: summary.imported, duplicates: summary.duplicates, invalid: summary.invalid, skipped: summary.skipped } });
   return summary;
+}
+
+export async function importRecruitersFromCsv(csv: string) {
+  const rows = await new Promise<CsvRow[]>((resolve, reject) => {
+    const output: CsvRow[] = [];
+    parseString(csv, { headers: true, trim: true })
+      .on("error", reject)
+      .on("data", (row) => output.push(row))
+      .on("end", () => resolve(output));
+  });
+  return importRecruitersFromRows(normalizeImportRows(rows, "CSV"), "CSV");
 }
 
 export async function exportRecruitersCsv() {
