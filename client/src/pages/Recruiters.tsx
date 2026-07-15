@@ -11,7 +11,16 @@ import type { Recruiter, Template, ImportResult } from "../types";
 export function Recruiters() {
   const [refresh, setRefresh] = React.useState(0);
   const [search, setSearch] = React.useState("");
-  const { data } = useApi<{ rows: Recruiter[]; total: number }>(`/api/recruiters?search=${encodeURIComponent(search)}`, refresh);
+  const [page, setPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(25);
+  const recruiterQuery = React.useMemo(() => {
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("pageSize", String(pageSize));
+    if (search) params.set("search", search);
+    return params.toString();
+  }, [page, pageSize, search]);
+  const { data } = useApi<{ rows: Recruiter[]; total: number; page: number; pageSize: number }>(`/api/recruiters?${recruiterQuery}`, refresh);
   const { data: templates } = useApi<Template[]>("/api/templates", refresh);
   const defaultTemplate = templates?.find((template) => template.isDefault) ?? templates?.[0];
   const [form, setForm] = React.useState({ fullName: "", company: "", email: "", designation: "", notes: "", templateId: "" });
@@ -39,6 +48,15 @@ export function Recruiters() {
     if (!form.templateId && defaultTemplate) setForm((current) => ({ ...current, templateId: String(defaultTemplate.id) }));
   }, [defaultTemplate, form.templateId]);
 
+  React.useEffect(() => {
+    setPage(1);
+  }, [search]);
+
+  React.useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize));
+    if (page > totalPages) setPage(totalPages);
+  }, [data?.total, page, pageSize]);
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!form.templateId) {
@@ -49,6 +67,7 @@ export function Recruiters() {
     try {
       await api("/api/recruiters", { method: "POST", body: JSON.stringify({ ...form, templateId: Number(form.templateId) }) });
       setForm({ fullName: "", company: "", email: "", designation: "", notes: "", templateId: defaultTemplate ? String(defaultTemplate.id) : "" });
+      setPage(1);
       setRefresh((value) => value + 1);
       toast.success("Recruiter added successfully");
     } catch (err) {
@@ -116,6 +135,7 @@ export function Recruiters() {
       body.append("file", file);
       const result = await api<ImportResult>("/api/recruiters/import", { method: "POST", body });
       setImportResult(result);
+      setPage(1);
       setRefresh((value) => value + 1);
     } catch (err) {
       // Server-thrown errors (e.g. wrong column names) surface here as a clear message
@@ -128,12 +148,46 @@ export function Recruiters() {
   };
 
   const hasTemplates = templates && templates.length > 0;
+  const totalRecruiters = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalRecruiters / pageSize));
+  const firstVisible = totalRecruiters === 0 ? 0 : ((page - 1) * pageSize) + 1;
+  const lastVisible = Math.min(page * pageSize, totalRecruiters);
+  const getPageNumbers = () => {
+    const pages: Array<number | string> = [];
+    const maxVisible = 5;
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+      return pages;
+    }
+    pages.push(1);
+    const start = Math.max(2, page - 1);
+    const end = Math.min(totalPages - 1, page + 1);
+    if (start > 2) pages.push("...");
+    for (let i = start; i <= end; i++) pages.push(i);
+    if (end < totalPages - 1) pages.push("...");
+    pages.push(totalPages);
+    return pages;
+  };
 
   return (
     <Page title="Recruiters" actions={<a className={`button secondary ${isImporting ? "disabled" : ""}`} href={`${API_URL}/api/recruiters/export`}>Export CSV</a>}>
       <section className="panel">
         <div className="toolbar">
           <input placeholder="Search" value={search} onChange={(event) => setSearch(event.target.value)} disabled={isImporting} />
+          <select
+            value={pageSize}
+            onChange={(event) => {
+              setPageSize(Number(event.target.value));
+              setPage(1);
+            }}
+            disabled={isImporting}
+            style={{ maxWidth: "140px" }}
+          >
+            <option value="25">25 per page</option>
+            <option value="50">50 per page</option>
+            <option value="100">100 per page</option>
+            <option value="200">200 per page</option>
+          </select>
           <label className={`button secondary ${isImporting ? "disabled" : ""}`}>
             {isImporting ? (
               <>
@@ -289,6 +343,48 @@ export function Recruiters() {
           </tbody>
         </table>
       </section>
+
+      {totalRecruiters > 0 && (
+        <div className="pagination-container">
+          <div className="pagination-info">
+            Showing {firstVisible} to {lastVisible} of {totalRecruiters} recruiters
+          </div>
+          <div className="pagination-buttons">
+            <button
+              type="button"
+              className="pagination-btn inactive"
+              disabled={page === 1}
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+            >
+              Previous
+            </button>
+            {getPageNumbers().map((value, index) => {
+              if (value === "...") {
+                return <span key={`page-gap-${index}`} style={{ padding: "0 8px", color: "var(--text-muted)" }}>...</span>;
+              }
+              const pageNumber = value as number;
+              return (
+                <button
+                  key={`page-${pageNumber}`}
+                  type="button"
+                  className={`pagination-btn ${page === pageNumber ? "active" : "inactive"}`}
+                  onClick={() => setPage(pageNumber)}
+                >
+                  {pageNumber}
+                </button>
+              );
+            })}
+            <button
+              type="button"
+              className="pagination-btn inactive"
+              disabled={page === totalPages}
+              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Edit Recruiter Modal */}
       {editingRecruiter && (
