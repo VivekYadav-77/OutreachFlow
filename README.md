@@ -675,7 +675,29 @@ A: This means the template placeholder wasn't replaced. Make sure the recruiter 
 
 **Q: How do I import recruiters from a spreadsheet?**
 
-A: Upload a CSV, `.xlsx`, or `.xls` file directly from the Recruiters page. Exact headers are not required: the importer recognizes common alternatives like `Name` or `Full Name`, `Title` or `Job Title`, `Company` or `Company Name`, and `Email`, `Email ID`, or `Email Address`. It also still accepts the canonical headers `fullName`, `company`, `email`, with optional `designation`, `linkedin`, and `notes`.
+A: Upload a CSV, `.xlsx`, or `.xls` file directly from the Recruiters page. The first row should contain column headers, and each contact should be one row below it.
+
+Required attributes:
+
+| Attribute | Accepted column headers | Description |
+|---|---|---|
+| `fullName` | `fullName`, `Full Name`, `Name`, `Contact Name`, `HR Name` | Recruiter/contact person's name |
+| `company` | `company`, `Company`, `Company Name`, `Organization`, `Organisation` | Company name |
+| `email` | `email`, `Email`, `Email ID`, `Email Address`, `Mail`, `Mail ID` | Recruiter's email address |
+
+Optional attributes:
+
+| Attribute | Accepted column headers | Description |
+|---|---|---|
+| `designation` | `designation`, `Designation`, `Title`, `Job Title`, `Role`, `Position` | Job title or role |
+| `linkedin` | `linkedin`, `LinkedIn`, `LinkedIn URL`, `Profile`, `LinkedIn Profile` | LinkedIn/profile URL |
+| `notes` | `notes`, `Notes`, `Remarks`, `Comments`, `Category` | Extra context; `Category` is used as notes when no notes column exists |
+
+Example structure:
+
+| Name | Title | Company | Category | Email |
+|---|---|---|---|---|
+| Reena Vijayanand | Head HR - Data Center | AdaniConneX | MNC / Product Companies | reena.v@adani.com |
 
 ---
 
