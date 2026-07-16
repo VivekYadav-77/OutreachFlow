@@ -27,11 +27,20 @@ type BulkDeleteRecruitersResult = {
   skipped: number;
 };
 
+const DASHBOARD_AUTO_REFRESH_MS = 5000;
+
+function formatLastUpdated(date: Date | null) {
+  if (!date) return "Waiting for update";
+  return `Updated ${date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
+}
+
 export function Dashboard() {
   const [refresh, setRefresh] = React.useState(0);
-  const { data, error } = useApi<Stats>("/api/statistics", refresh);
+  const { data, error, loading } = useApi<Stats>("/api/statistics", refresh);
   const [actionLoading, setActionLoading] = React.useState<string | null>(null);
   const [showDeleteRecruitersConfirm, setShowDeleteRecruitersConfirm] = React.useState(false);
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = React.useState(true);
+  const [lastUpdatedAt, setLastUpdatedAt] = React.useState<Date | null>(null);
   const toast = useToast();
 
   const [searchQuery, setSearchQuery] = React.useState("");
@@ -42,6 +51,35 @@ export function Dashboard() {
   React.useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, statusFilter, itemsPerPage]);
+
+  React.useEffect(() => {
+    if (data) setLastUpdatedAt(new Date());
+  }, [data]);
+
+  React.useEffect(() => {
+    if (!autoRefreshEnabled) return;
+
+    const refreshIfVisible = () => {
+      if (document.visibilityState === "visible") {
+        setRefresh((value) => value + 1);
+      }
+    };
+
+    const intervalId = window.setInterval(refreshIfVisible, DASHBOARD_AUTO_REFRESH_MS);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") refreshIfVisible();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [autoRefreshEnabled]);
+
+  const refreshDashboard = () => {
+    setRefresh((value) => value + 1);
+  };
 
   const action = async (path: string) => {
     setActionLoading(path);
@@ -141,7 +179,35 @@ export function Dashboard() {
   };
 
   return (
-    <Page title="Dashboard" actions={<GoogleAuthStatus />}>
+    <Page
+      title="Dashboard"
+      actions={(
+        <div className="dashboard-header-actions">
+          <div className="dashboard-refresh-control">
+            <span className="dashboard-refresh-status">{formatLastUpdated(lastUpdatedAt)}</span>
+            <button
+              type="button"
+              className={`dashboard-auto-toggle ${autoRefreshEnabled ? "active" : ""}`}
+              aria-pressed={autoRefreshEnabled}
+              onClick={() => setAutoRefreshEnabled((enabled) => !enabled)}
+            >
+              Auto {autoRefreshEnabled ? "on" : "off"}
+            </button>
+            <button
+              type="button"
+              className="secondary dashboard-refresh-button"
+              aria-label="Refresh dashboard"
+              title="Refresh dashboard"
+              disabled={loading}
+              onClick={refreshDashboard}
+            >
+              <RefreshCw size={16} className={loading ? "refresh-spin" : undefined} />
+            </button>
+          </div>
+          <GoogleAuthStatus />
+        </div>
+      )}
+    >
       {error && <p className="error">{error}</p>}
       {authStatus?.status === "AUTH_REQUIRED" && (
         <div className="auth-required-banner">

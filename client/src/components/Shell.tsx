@@ -43,7 +43,7 @@ export function Shell() {
             );
           })}
         </nav>
-        <div style={{ marginTop: 'auto', paddingTop: '20px' }}>
+        <div className="sidebar-auth">
           <GoogleAuthStatus />
         </div>
       </aside>
