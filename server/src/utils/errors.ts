@@ -27,6 +27,12 @@ export class OAuthError extends AppError {
   }
 }
 
+export class AuthRequiredError extends AppError {
+  constructor(message = "Google authorization expired. Reconnect your account.", details?: unknown) {
+    super(message, 401, "AUTH_REQUIRED", details);
+  }
+}
+
 export class QueueError extends AppError {
   constructor(message: string, details?: unknown) {
     super(message, 409, "QUEUE_ERROR", details);

@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { emailWorker } from "../workers/emailWorker.js";
 import { enqueuePendingRecruiters, getQueueSummary, pauseQueue, resumeQueue, retryFailedJobs, stopQueue } from "../queue/queueService.js";
+import { getGoogleConnectionStatus } from "../services/oauthConnectionService.js";
+import { AuthRequiredError } from "../utils/errors.js";
 
 export const queueRoutes = Router();
 
@@ -14,6 +16,8 @@ queueRoutes.get("/", async (_req, res, next) => {
 
 queueRoutes.post("/start", async (_req, res, next) => {
   try {
+    const auth = await getGoogleConnectionStatus();
+    if (auth.status !== "CONNECTED") throw new AuthRequiredError();
     const enqueued = await enqueuePendingRecruiters();
     await emailWorker.start();
     res.json({ ok: true, data: { ...enqueued, worker: "running" } });
@@ -34,6 +38,8 @@ queueRoutes.post("/pause", async (_req, res, next) => {
 
 queueRoutes.post("/resume", async (_req, res, next) => {
   try {
+    const auth = await getGoogleConnectionStatus();
+    if (auth.status !== "CONNECTED") throw new AuthRequiredError();
     await resumeQueue();
     await emailWorker.start();
     res.json({ ok: true });

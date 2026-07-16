@@ -8,8 +8,14 @@ export interface ThemeContextType {
 export type AuthStatus = {
   configured: boolean;
   connected: boolean;
+  status: "CONNECTED" | "AUTH_REQUIRED" | "CONNECTING" | "DISCONNECTED" | "ERROR";
   emailAddress: string | null;
   scope?: string;
+  lastConnectedAt?: string | null;
+  lastRefreshAt?: string | null;
+  lastAuthFailureAt?: string | null;
+  lastAuthFailureReason?: string | null;
+  lastReconnectAt?: string | null;
   updatedAt?: string;
 };
 
@@ -37,6 +43,7 @@ export type Stats = {
   remainingRecruiters: number;
   estimatedCompletionDate: string | null;
   workerStatus: string;
+  authStatus?: AuthStatus;
   queue: Record<string, number>;
   queueItems?: QueueItem[];
 };

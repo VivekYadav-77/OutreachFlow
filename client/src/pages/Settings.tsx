@@ -1,10 +1,11 @@
 import React from "react";
-import { AlertTriangle, RefreshCw, SlidersHorizontal, X, XCircle } from "lucide-react";
-import { api, useApi } from "../api/client";
+import { AlertTriangle, SlidersHorizontal, X, XCircle } from "lucide-react";
+import { API_URL, api, useApi } from "../api/client";
 import { Page } from "../components/Page";
 import { GoogleAuthStatus } from "../components/GoogleAuthStatus";
 import { useToast } from "../context/ToastContext";
 import { Spinner } from "../components/Spinner";
+import type { AuthStatus } from "../types";
 
 const SETTING_METADATA: Record<string, {
   title: string;
@@ -103,6 +104,24 @@ const FORMATTED_LABELS: Record<string, string> = {
   endTime: "Send End Time (HH:MM)",
   retryCount: "Max Retry Attempts"
 };
+
+const AUTH_STATUS_LABELS: Record<AuthStatus["status"], string> = {
+  CONNECTED: "Connected",
+  AUTH_REQUIRED: "Authentication Required",
+  CONNECTING: "Connecting",
+  DISCONNECTED: "Disconnected",
+  ERROR: "Error"
+};
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "Not available";
+  return new Date(value).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
 
 interface SettingOptionModalProps {
   isOpen: boolean;
@@ -362,6 +381,7 @@ function SafeSendingGuidelinesModal({ isOpen, onClose, settings }: { isOpen: boo
 export function SettingsPage() {
   const [refresh, setRefresh] = React.useState(0);
   const { data } = useApi<Record<string, unknown>>("/api/settings", refresh);
+  const { data: authStatus } = useApi<AuthStatus>("/api/auth/status", refresh);
   const [form, setForm] = React.useState<Record<string, unknown>>({});
   const [isGuidelinesOpen, setIsGuidelinesOpen] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
@@ -484,6 +504,37 @@ export function SettingsPage() {
           View Guidelines
         </button>
       </div>
+
+      <section className={`panel google-connection-card auth-${(authStatus?.status ?? "DISCONNECTED").toLowerCase()}`}>
+        <div className="google-connection-main">
+          <div>
+            <h2>Google Account</h2>
+            <div className="google-connection-email">{authStatus?.emailAddress ?? "Gmail sending account"}</div>
+          </div>
+          <span className={`badge auth-${(authStatus?.status ?? "DISCONNECTED").toLowerCase()}`}>
+            {AUTH_STATUS_LABELS[authStatus?.status ?? "DISCONNECTED"]}
+          </span>
+        </div>
+        <div className="google-connection-grid">
+          <div>
+            <span>Last Connected</span>
+            <strong>{formatDateTime(authStatus?.lastConnectedAt ?? authStatus?.updatedAt)}</strong>
+          </div>
+          <div>
+            <span>Last Refresh</span>
+            <strong>{formatDateTime(authStatus?.lastRefreshAt)}</strong>
+          </div>
+          <div>
+            <span>Failure Reason</span>
+            <strong>{authStatus?.lastAuthFailureReason ?? "None"}</strong>
+          </div>
+        </div>
+        {authStatus?.status !== "CONNECTED" && (
+          <a className="button" href={`${API_URL}/api/auth/google`}>
+            {authStatus?.status === "AUTH_REQUIRED" ? "Reconnect Google" : "Connect Google"}
+          </a>
+        )}
+      </section>
 
       <div className="safety-meter-card">
         <div className="safety-meter-header">

@@ -40,6 +40,7 @@ Then open `server/.env` in any text editor and fill in your real values.
 | `PORT` | Optional | `4000` | Backend server port |
 | `CLIENT_URL` | Optional | `http://localhost:5173` | Frontend URL (used for CORS) |
 | `LOG_LEVEL` | Optional | `info` | Logging verbosity |
+| `TOKEN_ENCRYPTION_KEY` | Optional | — | Stable secret used to encrypt stored Google refresh tokens |
 | `GEMINI_API_KEY` | ⚠️ For AI cover letters | — | Google Gemini AI API key |
 | `GEMINI_MODEL_NAME` | Optional | `gemini-3.1-flash-lite` | Gemini model name |
 
@@ -247,6 +248,25 @@ LOG_LEVEL=info
 
 **What happens if it's an invalid value:**
 The Zod schema accepts any string — an invalid level is passed to Pino, which may default to `info` or produce unexpected behavior.
+
+---
+
+### `TOKEN_ENCRYPTION_KEY`
+
+**Required: No** — recommended for Gmail sending.
+
+**What it does:**
+Encrypts the Google refresh token before it is stored in the database. Use one stable random value for this project and keep it private.
+
+**Example value:**
+```env
+TOKEN_ENCRYPTION_KEY=replace-with-a-stable-random-secret-at-least-16-chars
+```
+
+**What happens if it's missing:**
+The server falls back to existing local secrets so the app remains backward compatible, but setting this variable is safer and makes token encryption independent from Google credential rotation.
+
+**Important:** Do not change this value after connecting Google unless you reconnect Google afterward. Existing encrypted refresh tokens need the same key to be decrypted.
 
 ---
 

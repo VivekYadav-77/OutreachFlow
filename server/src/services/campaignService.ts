@@ -10,7 +10,7 @@ export const campaignSchema = z
   .object({
     name: z.string().min(1),
     description: z.string().optional().default(""),
-    status: z.enum(["Draft", "Scheduled", "Running", "Paused", "Completed", "Cancelled"]).optional().default("Draft"),
+    status: z.enum(["Draft", "Scheduled", "Running", "Paused", "PAUSED_AUTH", "Completed", "Cancelled"]).optional().default("Draft"),
     resumeFileId: z.number().int().positive().nullable().optional(),
     dailyLimit: z.number().int().min(1).optional(),
     minDelaySeconds: z.number().int().min(1).optional(),

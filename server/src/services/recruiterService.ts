@@ -170,6 +170,48 @@ export async function deleteRecruiter(id: number) {
   }
 }
 
+export async function deleteDeletableRecruiters() {
+  const rows = await db.select({ id: recruiters.id }).from(recruiters);
+  if (rows.length === 0) return { deleted: 0, skipped: 0 };
+
+  const sendingJobs = await db
+    .select({ recruiterId: emailQueue.recruiterId })
+    .from(emailQueue)
+    .where(eq(emailQueue.state, "Sending"));
+
+  const blockedIds = new Set(
+    sendingJobs
+      .map((job) => job.recruiterId)
+      .filter((recruiterId): recruiterId is number => recruiterId !== null)
+  );
+
+  let deleted = 0;
+  let skipped = blockedIds.size;
+
+  for (const row of rows) {
+    if (blockedIds.has(row.id)) continue;
+
+    try {
+      await deleteRecruiter(row.id);
+      deleted += 1;
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        skipped += 1;
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  await createLog({
+    event: "recruiter.bulk_deleted",
+    message: `Bulk recruiter delete completed: ${deleted} deleted, ${skipped} skipped`,
+    metadata: { deleted, skipped }
+  });
+
+  return { deleted, skipped };
+}
+
 // Exported so the frontend can show the expected structure as a hint
 export const CSV_REQUIRED_COLUMNS = ["fullName", "company", "email"] as const;
 export const CSV_OPTIONAL_COLUMNS = ["designation", "linkedin", "notes"] as const;

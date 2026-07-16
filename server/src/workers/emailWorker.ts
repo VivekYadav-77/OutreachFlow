@@ -5,7 +5,9 @@ import { getComposedEmailWithAttachments, markDraftFailed, markDraftSending, mar
 import { emailService } from "../services/emailService.js";
 import { createLog } from "../services/logService.js";
 import { getSettings, setWorkerStatus } from "../services/settingsService.js";
+import { getGoogleConnectionStatus, pauseSendingForAuthFailure } from "../services/oauthConnectionService.js";
 import { markJobFailed, markJobSent, pickNextJob, scheduleRetry } from "../queue/queueService.js";
+import { AuthRequiredError } from "../utils/errors.js";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -85,6 +87,19 @@ class EmailWorker {
         continue;
       }
 
+      const authStatus = await getGoogleConnectionStatus();
+      if (authStatus.status !== "CONNECTED") {
+        this.running = false;
+        await setWorkerStatus("paused");
+        await createLog({
+          level: authStatus.status === "AUTH_REQUIRED" ? "warn" : "error",
+          event: "worker.stopped_auth",
+          message: "Worker stopped because Google authorization is required",
+          metadata: { oauthStatus: authStatus.status }
+        });
+        break;
+      }
+
       const job = await pickNextJob();
       if (!job) {
         await sleep(30_000);
@@ -115,6 +130,12 @@ class EmailWorker {
         await createLog({ event: "email.sent", message: logMessage, recruiterId, queueId: job.id, metadata: job.draftId ? { draftId: job.draftId } : {} });
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown Gmail send failure";
+        if (error instanceof AuthRequiredError) {
+          await pauseSendingForAuthFailure(String(error.details && typeof error.details === "object" && "reason" in error.details ? error.details.reason : message), job.id);
+          this.running = false;
+          await setWorkerStatus("paused");
+          break;
+        }
         if (job.draftId) await markDraftFailed(job.draftId, message);
         if (emailService.classifyError(error) === "temporary") {
           await scheduleRetry(job.id, message);

@@ -11,6 +11,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(4000),
   CLIENT_URL: z.string().url().default("http://localhost:5173"),
   LOG_LEVEL: z.string().default("info"),
+  TOKEN_ENCRYPTION_KEY: z.string().min(16, "TOKEN_ENCRYPTION_KEY must be at least 16 characters").optional(),
   GEMINI_API_KEY: z.string().optional(),
   GEMINI_MODEL_NAME: z.string().default("gemini-3.1-flash-lite")
 });

@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  AlertTriangle,
   Check,
   Clock,
   Inbox,
@@ -9,20 +10,28 @@ import {
   RefreshCw,
   Search,
   Send,
+  Trash2,
   XCircle
 } from "lucide-react";
-import { api, useApi } from "../api/client";
+import { API_URL, api, useApi } from "../api/client";
 import { Page } from "../components/Page";
 import { StatCard } from "../components/StatCard";
 import { GoogleAuthStatus } from "../components/GoogleAuthStatus";
 import { useToast } from "../context/ToastContext";
 import { Spinner } from "../components/Spinner";
+import { ConfirmModal } from "../components/ConfirmModal";
 import type { Stats, QueueItem } from "../types";
+
+type BulkDeleteRecruitersResult = {
+  deleted: number;
+  skipped: number;
+};
 
 export function Dashboard() {
   const [refresh, setRefresh] = React.useState(0);
   const { data, error } = useApi<Stats>("/api/statistics", refresh);
   const [actionLoading, setActionLoading] = React.useState<string | null>(null);
+  const [showDeleteRecruitersConfirm, setShowDeleteRecruitersConfirm] = React.useState(false);
   const toast = useToast();
 
   const [searchQuery, setSearchQuery] = React.useState("");
@@ -47,6 +56,25 @@ export function Dashboard() {
     }
   };
 
+  const deleteDeletableRecruiters = async () => {
+    const actionKey = "/api/recruiters/bulk/deletable";
+    setActionLoading(actionKey);
+    setShowDeleteRecruitersConfirm(false);
+    try {
+      const result = await api<BulkDeleteRecruitersResult>(actionKey, { method: "DELETE" });
+      setRefresh((value) => value + 1);
+      if (result.deleted === 0) {
+        toast.warning(result.skipped > 0 ? "No recruiters could be deleted while emails are sending." : "No recruiters found to delete.");
+      } else {
+        toast.success(`Deleted ${result.deleted} recruiter${result.deleted === 1 ? "" : "s"}${result.skipped > 0 ? `, skipped ${result.skipped} currently sending` : ""}.`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete recruiters");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const queue = data?.queue ?? {};
   const pendingCount = queue.Pending ?? 0;
   const sendingCount = queue.Sending ?? 0;
@@ -56,6 +84,7 @@ export function Dashboard() {
   const pausedCount = queue.Paused ?? 0;
 
   const totalQueue = pendingCount + sendingCount + sentCount + failedCount + retryingCount + pausedCount;
+  const authStatus = data?.authStatus;
 
   const filteredQueueItems = React.useMemo(() => {
     const rawItems = data?.queueItems ?? [];
@@ -114,6 +143,16 @@ export function Dashboard() {
   return (
     <Page title="Dashboard" actions={<GoogleAuthStatus />}>
       {error && <p className="error">{error}</p>}
+      {authStatus?.status === "AUTH_REQUIRED" && (
+        <div className="auth-required-banner">
+          <AlertTriangle size={22} />
+          <div className="auth-required-content">
+            <strong>Google Authorization Required</strong>
+            <span>{authStatus.lastAuthFailureReason ?? "Your Google authorization has expired, been revoked, or is no longer valid."}</span>
+          </div>
+          <a className="button" href={`${API_URL}/api/auth/google`}>Reconnect Google</a>
+        </div>
+      )}
       <div className="stats-grid">
         <StatCard label="Today's sent" value={data?.todaySent ?? 0} />
         <StatCard label="Pending" value={data?.pending ?? 0} />
@@ -141,6 +180,14 @@ export function Dashboard() {
           <button disabled={actionLoading !== null} onClick={() => action("/api/queue/retry-failed")}>
             {actionLoading === "/api/queue/retry-failed" && <Spinner size={14} />}
             Retry Failed
+          </button>
+          <button
+            className="danger-button"
+            disabled={actionLoading !== null}
+            onClick={() => setShowDeleteRecruitersConfirm(true)}
+          >
+            {actionLoading === "/api/recruiters/bulk/deletable" ? <Spinner size={14} /> : <Trash2 size={14} />}
+            Delete Recruiters
           </button>
         </div>
       </section>
@@ -408,6 +455,15 @@ export function Dashboard() {
           )}
         </section>
       )}
+      <ConfirmModal
+        isOpen={showDeleteRecruitersConfirm}
+        title="Delete Recruiters"
+        message="Delete every recruiter that is currently allowed to be deleted? Recruiters with actively sending emails will be skipped. This action cannot be undone."
+        onConfirm={deleteDeletableRecruiters}
+        onCancel={() => setShowDeleteRecruitersConfirm(false)}
+        confirmText="Delete Recruiters"
+        isDestructive={true}
+      />
     </Page>
   );
 }

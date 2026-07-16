@@ -166,6 +166,20 @@ button.secondary {
   color: var(--primary-dark);
 }
 
+button.danger-button,
+.button.danger-button {
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
+  color: var(--error-text);
+}
+
+button.danger-button:hover,
+.button.danger-button:hover {
+  background: var(--error-text);
+  border-color: var(--error-text);
+  color: #ffffff;
+}
+
 .button.secondary:disabled,
 button.secondary:disabled {
   background: var(--border-lighter) !important;
@@ -376,6 +390,12 @@ th {
   color: var(--success-text);
 }
 
+.auth-status-action {
+  background: var(--bg-panel);
+  border-color: var(--border-light);
+  color: var(--text-main);
+}
+
 .auth-status .email {
   font-size: 14px;
 }
@@ -391,6 +411,97 @@ th {
   color: var(--safe-text);
 }
 
+.badge.success,
+.badge.auth-connected {
+  background: var(--success-bg);
+  border: 1px solid var(--success-border);
+  color: var(--success-text);
+}
+
+.badge.auth-auth_required,
+.badge.auth-error {
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
+  color: var(--error-text);
+}
+
+.badge.auth-connecting {
+  background: var(--info-bg);
+  border: 1px solid var(--info-border);
+  color: var(--info-text);
+}
+
+.badge.auth-disconnected {
+  background: var(--border-lighter);
+  border: 1px solid var(--border);
+  color: var(--text-muted-darker);
+}
+
+.auth-required-banner {
+  align-items: center;
+  background: var(--error-bg);
+  border: 1px solid var(--error-border);
+  border-radius: 8px;
+  color: var(--error-text);
+  display: flex;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+}
+
+.auth-required-content {
+  display: grid;
+  flex: 1;
+  gap: 3px;
+}
+
+.auth-required-content span {
+  font-size: 13px;
+}
+
+.google-connection-card {
+  display: grid;
+  gap: 16px;
+}
+
+.google-connection-main {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.google-connection-email {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.google-connection-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.google-connection-grid div {
+  background: var(--bg-body);
+  border: 1px solid var(--border-lighter);
+  border-radius: 6px;
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+}
+
+.google-connection-grid span {
+  color: var(--text-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.google-connection-grid strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 900px) {
   .app {
     grid-template-columns: 1fr;
@@ -401,8 +512,15 @@ th {
   }
 
   .stats-grid,
-  .form-grid {
+  .form-grid,
+  .google-connection-grid {
     grid-template-columns: 1fr;
+  }
+
+  .auth-required-banner,
+  .google-connection-main {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .page-header {

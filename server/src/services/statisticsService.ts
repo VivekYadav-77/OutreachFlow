@@ -3,6 +3,7 @@ import { db } from "../database/db.js";
 import { dailyStats, emailQueue, recruiters } from "../database/schema.js";
 import { getQueueSummary } from "../queue/queueService.js";
 import { getSettings } from "./settingsService.js";
+import { getAuthStatus } from "../auth/googleAuth.js";
 
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
@@ -52,6 +53,7 @@ export async function getStatistics() {
     remainingRecruiters: pending,
     estimatedCompletionDate: pending ? completion.toISOString().slice(0, 10) : null,
     workerStatus: settings.workerStatus,
+    authStatus: await getAuthStatus(),
     queue: await getQueueSummary(),
     queueItems
   };

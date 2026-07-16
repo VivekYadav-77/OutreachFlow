@@ -7,6 +7,7 @@ import { config } from "../config.js";
 import { validate } from "../middleware/validate.js";
 import {
   createRecruiter,
+  deleteDeletableRecruiters,
   deleteRecruiter,
   exportRecruitersCsv,
   getRecruiter,
@@ -98,6 +99,14 @@ recruiterRoutes.post("/", validate("body", recruiterSchema), async (req, res, ne
 recruiterRoutes.put("/:id", validate("params", z.object({ id: z.coerce.number().int().positive() })), validate("body", recruiterSchema.partial()), async (req, res, next) => {
   try {
     res.json({ ok: true, data: await updateRecruiter(Number(req.params.id), req.body) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+recruiterRoutes.delete("/bulk/deletable", async (_req, res, next) => {
+  try {
+    res.json({ ok: true, data: await deleteDeletableRecruiters() });
   } catch (error) {
     next(error);
   }

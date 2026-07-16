@@ -29,6 +29,13 @@
       "when": 1783710000000,
       "tag": "0003_template_outreach",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1784246400000,
+      "tag": "0004_resilient_google_oauth",
+      "breakpoints": true
     }
   ]
 }

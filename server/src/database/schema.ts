@@ -14,10 +14,11 @@ import {
 export const recruiterStatus = pgEnum("recruiter_status", ["Pending", "Sent", "Failed", "Replied", "Skipped"]);
 export const queueState = pgEnum("queue_state", ["Pending", "Sending", "Sent", "Failed", "Retrying", "Paused"]);
 export const logLevel = pgEnum("log_level", ["info", "warn", "error"]);
-export const campaignStatus = pgEnum("campaign_status", ["Draft", "Scheduled", "Running", "Paused", "Completed", "Cancelled"]);
+export const campaignStatus = pgEnum("campaign_status", ["Draft", "Scheduled", "Running", "Paused", "PAUSED_AUTH", "Completed", "Cancelled"]);
 export const campaignRecipientStatus = pgEnum("campaign_recipient_status", ["Pending", "Queued", "Sending", "Sent", "Failed", "Skipped"]);
 export const failureType = pgEnum("failure_type", ["Temporary", "Permanent"]);
 export const emailDraftStatus = pgEnum("email_draft_status", ["Draft", "Queued", "Sending", "Sent", "Failed"]);
+export const oauthConnectionStatus = pgEnum("oauth_connection_status", ["CONNECTED", "AUTH_REQUIRED", "CONNECTING", "DISCONNECTED", "ERROR"]);
 
 export const emailTemplates = pgTable("email_templates", {
   id: serial("id").primaryKey(),
@@ -125,6 +126,9 @@ export const campaigns = pgTable("campaigns", {
   retryCount: integer("retry_count").notNull().default(4),
   retryIntervalsMinutes: jsonb("retry_intervals_minutes").$type<number[]>().notNull().default([5, 15, 30, 60]),
   attachmentEnabled: boolean("attachment_enabled").notNull().default(false),
+  pauseReason: text("pause_reason"),
+  pausedAt: timestamp("paused_at", { withTimezone: true }),
+  resumedAt: timestamp("resumed_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
 });
@@ -190,6 +194,13 @@ export const oauthTokens = pgTable("oauth_tokens", {
   expiryDate: timestamp("expiry_date", { withTimezone: true }),
   scope: text("scope"),
   tokenType: text("token_type"),
+  status: oauthConnectionStatus("status").notNull().default("CONNECTED"),
+  lastConnectedAt: timestamp("last_connected_at", { withTimezone: true }),
+  lastRefreshAt: timestamp("last_refresh_at", { withTimezone: true }),
+  lastAuthFailureAt: timestamp("last_auth_failure_at", { withTimezone: true }),
+  lastAuthFailureReason: text("last_auth_failure_reason"),
+  lastReconnectAt: timestamp("last_reconnect_at", { withTimezone: true }),
+  lastTokenRefreshAttemptAt: timestamp("last_token_refresh_attempt_at", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
 });
 
