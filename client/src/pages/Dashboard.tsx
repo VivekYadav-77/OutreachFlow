@@ -253,7 +253,7 @@ export function Dashboard() {
             onClick={() => setShowDeleteRecruitersConfirm(true)}
           >
             {actionLoading === "/api/recruiters/bulk/deletable" ? <Spinner size={14} /> : <Trash2 size={14} />}
-            Delete Recruiters
+            Delete all recruiter
           </button>
         </div>
       </section>
@@ -523,11 +523,11 @@ export function Dashboard() {
       )}
       <ConfirmModal
         isOpen={showDeleteRecruitersConfirm}
-        title="Delete Recruiters"
+        title="Delete all recruiter"
         message="Delete every recruiter that is currently allowed to be deleted? Recruiters with actively sending emails will be skipped. This action cannot be undone."
         onConfirm={deleteDeletableRecruiters}
         onCancel={() => setShowDeleteRecruitersConfirm(false)}
-        confirmText="Delete Recruiters"
+        confirmText="Delete all recruiter"
         isDestructive={true}
       />
     </Page>

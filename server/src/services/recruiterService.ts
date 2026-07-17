@@ -28,6 +28,33 @@ export const recruiterQuerySchema = z.object({
   status: z.enum(["Pending", "Sent", "Failed", "Replied", "Skipped"]).optional()
 });
 
+export const bulkRecruiterIdsSchema = z.object({
+  ids: z.array(z.coerce.number().int().positive()).min(1).max(200)
+});
+
+export const bulkRecruiterTemplateSchema = bulkRecruiterIdsSchema.extend({
+  templateId: z.coerce.number().int().positive()
+});
+
+function uniqueIds(ids: number[]) {
+  return Array.from(new Set(ids));
+}
+
+async function getSendingRecruiterIds(ids: number[]) {
+  if (ids.length === 0) return new Set<number>();
+
+  const rows = await db
+    .select({ recruiterId: emailQueue.recruiterId })
+    .from(emailQueue)
+    .where(and(inArray(emailQueue.recruiterId, ids), eq(emailQueue.state, "Sending")));
+
+  return new Set(
+    rows
+      .map((row) => row.recruiterId)
+      .filter((recruiterId): recruiterId is number => recruiterId !== null)
+  );
+}
+
 export async function listRecruiters(query: z.infer<typeof recruiterQuerySchema>) {
   const parsed = recruiterQuerySchema.parse(query);
   const filters = [];
@@ -210,6 +237,84 @@ export async function deleteDeletableRecruiters() {
   });
 
   return { deleted, skipped };
+}
+
+export async function deleteSelectedRecruiters(input: z.infer<typeof bulkRecruiterIdsSchema>) {
+  const parsed = bulkRecruiterIdsSchema.parse(input);
+  const ids = uniqueIds(parsed.ids);
+  const rows = await db.select({ id: recruiters.id }).from(recruiters).where(inArray(recruiters.id, ids));
+  const existingIds = new Set(rows.map((row) => row.id));
+  const sendingIds = await getSendingRecruiterIds(ids);
+
+  let deleted = 0;
+  let skipped = 0;
+
+  for (const row of rows) {
+    if (sendingIds.has(row.id)) {
+      skipped += 1;
+      continue;
+    }
+
+    try {
+      await deleteRecruiter(row.id);
+      deleted += 1;
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        skipped += 1;
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  const notFound = ids.filter((id) => !existingIds.has(id)).length;
+  await createLog({
+    event: "recruiter.bulk_selected_deleted",
+    message: `Selected recruiter delete completed: ${deleted} deleted, ${skipped} skipped, ${notFound} not found`,
+    metadata: { deleted, skipped, notFound }
+  });
+
+  return { deleted, skipped, notFound };
+}
+
+export async function assignTemplateToSelectedRecruiters(input: z.infer<typeof bulkRecruiterTemplateSchema>) {
+  const parsed = bulkRecruiterTemplateSchema.parse(input);
+  await getTemplate(parsed.templateId);
+
+  const ids = uniqueIds(parsed.ids);
+  const rows = await db.select({ id: recruiters.id }).from(recruiters).where(inArray(recruiters.id, ids));
+  const existingIds = new Set(rows.map((row) => row.id));
+  const sendingIds = await getSendingRecruiterIds(ids);
+
+  let updated = 0;
+  let skipped = 0;
+
+  for (const row of rows) {
+    if (sendingIds.has(row.id)) {
+      skipped += 1;
+      continue;
+    }
+
+    try {
+      await updateRecruiter(row.id, { templateId: parsed.templateId });
+      updated += 1;
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        skipped += 1;
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  const notFound = ids.filter((id) => !existingIds.has(id)).length;
+  await createLog({
+    event: "recruiter.bulk_template_assigned",
+    message: `Bulk recruiter template assignment completed: ${updated} updated, ${skipped} skipped, ${notFound} not found`,
+    metadata: { updated, skipped, notFound, templateId: parsed.templateId }
+  });
+
+  return { updated, skipped, notFound };
 }
 
 // Exported so the frontend can show the expected structure as a hint

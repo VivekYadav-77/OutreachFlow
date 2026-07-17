@@ -6,9 +6,13 @@ import { z } from "zod";
 import { config } from "../config.js";
 import { validate } from "../middleware/validate.js";
 import {
+  assignTemplateToSelectedRecruiters,
+  bulkRecruiterIdsSchema,
+  bulkRecruiterTemplateSchema,
   createRecruiter,
   deleteDeletableRecruiters,
   deleteRecruiter,
+  deleteSelectedRecruiters,
   exportRecruitersCsv,
   getRecruiter,
   importRecruitersFromCsv,
@@ -107,6 +111,22 @@ recruiterRoutes.put("/:id", validate("params", z.object({ id: z.coerce.number().
 recruiterRoutes.delete("/bulk/deletable", async (_req, res, next) => {
   try {
     res.json({ ok: true, data: await deleteDeletableRecruiters() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+recruiterRoutes.delete("/bulk/selected", validate("body", bulkRecruiterIdsSchema), async (req, res, next) => {
+  try {
+    res.json({ ok: true, data: await deleteSelectedRecruiters(req.body) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+recruiterRoutes.put("/bulk/template", validate("body", bulkRecruiterTemplateSchema), async (req, res, next) => {
+  try {
+    res.json({ ok: true, data: await assignTemplateToSelectedRecruiters(req.body) });
   } catch (error) {
     next(error);
   }

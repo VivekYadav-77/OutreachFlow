@@ -309,6 +309,41 @@ h2 {
   gap: 10px;
 }
 
+.bulk-actions-bar {
+  align-items: center;
+  background: var(--bg-body);
+  border: 1px solid var(--border-lighter);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+}
+
+.bulk-actions-bar select {
+  max-width: 240px;
+}
+
+.bulk-selection-summary {
+  color: var(--text-muted-darker);
+  font-size: 13px;
+  margin-right: auto;
+}
+
+.selection-cell {
+  text-align: center;
+  width: 44px;
+}
+
+.selection-checkbox {
+  cursor: pointer;
+  height: 16px;
+  min-height: 16px;
+  padding: 0;
+  width: 16px;
+}
+
 .form-grid {
   display: grid;
   gap: 12px;

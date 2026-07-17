@@ -8,6 +8,18 @@ import { ConfirmModal } from "../components/ConfirmModal";
 import { Spinner } from "../components/Spinner";
 import type { Recruiter, Template, ImportResult } from "../types";
 
+type BulkDeleteRecruitersResult = {
+  deleted: number;
+  skipped: number;
+  notFound: number;
+};
+
+type BulkAssignTemplateResult = {
+  updated: number;
+  skipped: number;
+  notFound: number;
+};
+
 export function Recruiters() {
   const [refresh, setRefresh] = React.useState(0);
   const [search, setSearch] = React.useState("");
@@ -37,6 +49,12 @@ export function Recruiters() {
   const [editForm, setEditForm] = React.useState({ fullName: "", company: "", email: "", designation: "", templateId: "" });
   const [editError, setEditError] = React.useState("");
   const [editSubmitting, setEditSubmitting] = React.useState(false);
+  const [selectedRecruiterIds, setSelectedRecruiterIds] = React.useState<Set<number>>(new Set());
+  const [bulkTemplateId, setBulkTemplateId] = React.useState("");
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = React.useState(false);
+  const [bulkDeleting, setBulkDeleting] = React.useState(false);
+  const [bulkAssigning, setBulkAssigning] = React.useState(false);
+  const selectAllRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
     if (form.templateId && templates && !templates.some((t) => String(t.id) === form.templateId)) {
@@ -51,6 +69,16 @@ export function Recruiters() {
   React.useEffect(() => {
     setPage(1);
   }, [search]);
+
+  React.useEffect(() => {
+    setSelectedRecruiterIds(new Set());
+  }, [search, page, pageSize, data?.rows]);
+
+  React.useEffect(() => {
+    if (bulkTemplateId && templates && !templates.some((template) => String(template.id) === bulkTemplateId)) {
+      setBulkTemplateId("");
+    }
+  }, [templates, bulkTemplateId]);
 
   React.useEffect(() => {
     const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize));
@@ -124,6 +152,96 @@ export function Recruiters() {
       toast.error(err instanceof Error ? err.message : "Failed to delete recruiter");
     } finally {
       setDeletingId(null);
+    }
+  };
+
+  const selectedCount = selectedRecruiterIds.size;
+  const visibleRecruiterIds = React.useMemo(() => (data?.rows ?? []).map((row) => row.id), [data?.rows]);
+  const selectedVisibleCount = visibleRecruiterIds.filter((id) => selectedRecruiterIds.has(id)).length;
+  const allVisibleSelected = visibleRecruiterIds.length > 0 && selectedVisibleCount === visibleRecruiterIds.length;
+  const hasPartialVisibleSelection = selectedVisibleCount > 0 && selectedVisibleCount < visibleRecruiterIds.length;
+  const bulkActionDisabled = isImporting || bulkDeleting || bulkAssigning || deletingId !== null || editSubmitting;
+
+  React.useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = hasPartialVisibleSelection;
+    }
+  }, [hasPartialVisibleSelection]);
+
+  const toggleRecruiterSelection = (id: number) => {
+    setSelectedRecruiterIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleVisibleSelection = () => {
+    setSelectedRecruiterIds((current) => {
+      const next = new Set(current);
+      if (allVisibleSelected) {
+        visibleRecruiterIds.forEach((id) => next.delete(id));
+      } else {
+        visibleRecruiterIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedRecruiterIds(new Set());
+
+  const bulkDeleteSelectedRecruiters = async () => {
+    const ids = Array.from(selectedRecruiterIds);
+    if (ids.length === 0) return;
+    setBulkDeleting(true);
+    setShowBulkDeleteConfirm(false);
+    try {
+      const result = await api<BulkDeleteRecruitersResult>("/api/recruiters/bulk/selected", {
+        method: "DELETE",
+        body: JSON.stringify({ ids })
+      });
+      clearSelection();
+      setRefresh((value) => value + 1);
+      if (result.deleted === 0) {
+        toast.warning(`No selected recruiters were deleted${result.skipped > 0 ? `; ${result.skipped} currently sending` : ""}${result.notFound > 0 ? `; ${result.notFound} not found` : ""}.`);
+      } else {
+        toast.success(`Deleted ${result.deleted} recruiter${result.deleted === 1 ? "" : "s"}${result.skipped > 0 ? `, skipped ${result.skipped} currently sending` : ""}${result.notFound > 0 ? `, ${result.notFound} not found` : ""}.`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete selected recruiters");
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
+
+  const bulkAssignTemplate = async () => {
+    const ids = Array.from(selectedRecruiterIds);
+    if (ids.length === 0) return;
+    if (!bulkTemplateId) {
+      toast.warning("Please select a template to assign.");
+      return;
+    }
+    setBulkAssigning(true);
+    try {
+      const result = await api<BulkAssignTemplateResult>("/api/recruiters/bulk/template", {
+        method: "PUT",
+        body: JSON.stringify({ ids, templateId: Number(bulkTemplateId) })
+      });
+      clearSelection();
+      setRefresh((value) => value + 1);
+      if (result.updated === 0) {
+        toast.warning(`No selected recruiters were updated${result.skipped > 0 ? `; ${result.skipped} currently sending` : ""}${result.notFound > 0 ? `; ${result.notFound} not found` : ""}.`);
+      } else {
+        toast.success(`Assigned template to ${result.updated} recruiter${result.updated === 1 ? "" : "s"}${result.skipped > 0 ? `, skipped ${result.skipped} currently sending` : ""}${result.notFound > 0 ? `, ${result.notFound} not found` : ""}.`);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to assign template");
+    } finally {
+      setBulkAssigning(false);
     }
   };
 
@@ -286,9 +404,49 @@ export function Recruiters() {
       </section>
 
       <section className="panel">
+        {selectedCount > 0 && (
+          <div className="bulk-actions-bar">
+            <div className="bulk-selection-summary">
+              <strong>{selectedCount}</strong> selected
+            </div>
+            <select
+              value={bulkTemplateId}
+              onChange={(event) => setBulkTemplateId(event.target.value)}
+              disabled={!hasTemplates || bulkActionDisabled}
+              aria-label="Template for selected recruiters"
+            >
+              <option value="">Assign template...</option>
+              {(templates ?? []).map((template) => (
+                <option key={template.id} value={template.id}>{template.name}{template.isDefault ? " (Default)" : ""}</option>
+              ))}
+            </select>
+            <button type="button" className="secondary" disabled={!hasTemplates || !bulkTemplateId || bulkActionDisabled} onClick={bulkAssignTemplate}>
+              {bulkAssigning && <Spinner size={14} />}
+              Apply Template
+            </button>
+            <button type="button" className="danger-button" disabled={bulkActionDisabled} onClick={() => setShowBulkDeleteConfirm(true)}>
+              {bulkDeleting ? <Spinner size={14} /> : <Trash2 size={14} />}
+              Delete selected
+            </button>
+            <button type="button" className="secondary" disabled={bulkActionDisabled} onClick={clearSelection}>
+              Clear
+            </button>
+          </div>
+        )}
         <table>
           <thead>
             <tr>
+              <th className="selection-cell">
+                <input
+                  ref={selectAllRef}
+                  className="selection-checkbox"
+                  type="checkbox"
+                  aria-label="Select all visible recruiters"
+                  checked={allVisibleSelected}
+                  disabled={visibleRecruiterIds.length === 0 || bulkActionDisabled}
+                  onChange={toggleVisibleSelection}
+                />
+              </th>
               <th>Name</th>
               <th>Company</th>
               <th>Email</th>
@@ -300,6 +458,16 @@ export function Recruiters() {
           <tbody>
             {(data?.rows ?? []).map((row) => (
               <tr key={row.id}>
+                <td className="selection-cell">
+                  <input
+                    className="selection-checkbox"
+                    type="checkbox"
+                    aria-label={`Select ${row.fullName}`}
+                    checked={selectedRecruiterIds.has(row.id)}
+                    disabled={bulkActionDisabled}
+                    onChange={() => toggleRecruiterSelection(row.id)}
+                  />
+                </td>
                 <td>{row.fullName}</td>
                 <td>{row.company}</td>
                 <td>{row.email}</td>
@@ -315,7 +483,7 @@ export function Recruiters() {
                       type="button"
                       className="action-btn"
                       title="Edit Recruiter"
-                      disabled={deletingId !== null}
+                      disabled={deletingId !== null || bulkDeleting || bulkAssigning}
                       onClick={() => startEdit(row)}
                     >
                       <Pencil size={14} />
@@ -324,7 +492,7 @@ export function Recruiters() {
                       type="button"
                       className="action-btn danger"
                       title="Delete Recruiter"
-                      disabled={deletingId !== null}
+                      disabled={deletingId !== null || bulkDeleting || bulkAssigning}
                       onClick={() => setRecruiterToDelete(row)}
                     >
                       {deletingId === row.id ? <Spinner size={14} /> : <Trash2 size={14} />}
@@ -335,7 +503,7 @@ export function Recruiters() {
             ))}
             {(!data?.rows || data.rows.length === 0) && (
               <tr>
-                <td colSpan={6} style={{ textAlign: "center", color: "var(--text-muted)", padding: "20px" }}>
+                <td colSpan={7} style={{ textAlign: "center", color: "var(--text-muted)", padding: "20px" }}>
                   No recruiters found.
                 </td>
               </tr>
@@ -509,6 +677,15 @@ export function Recruiters() {
         onConfirm={confirmDelete}
         onCancel={() => setRecruiterToDelete(null)}
         confirmText="Delete"
+        isDestructive={true}
+      />
+      <ConfirmModal
+        isOpen={showBulkDeleteConfirm}
+        title="Delete selected recruiters"
+        message={`Are you sure you want to delete ${selectedCount} selected recruiter${selectedCount === 1 ? "" : "s"}? Recruiters with actively sending emails will be skipped. This action cannot be undone.`}
+        onConfirm={bulkDeleteSelectedRecruiters}
+        onCancel={() => setShowBulkDeleteConfirm(false)}
+        confirmText="Delete selected"
         isDestructive={true}
       />
     </Page>
