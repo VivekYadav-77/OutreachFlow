@@ -28,16 +28,60 @@ type BulkDeleteRecruitersResult = {
 };
 
 const DASHBOARD_AUTO_REFRESH_MS = 5000;
+const QUEUE_ACTIONS = [
+  {
+    path: "/api/queue/start",
+    label: "Start",
+    successMessage: "Worker started",
+    selectedWhen: "running",
+    disabledWhen: ["running"]
+  },
+  {
+    path: "/api/queue/pause",
+    label: "Pause",
+    successMessage: "Worker paused",
+    selectedWhen: "paused",
+    disabledWhen: ["paused", "stopped"]
+  },
+  {
+    path: "/api/queue/resume",
+    label: "Resume",
+    successMessage: "Worker resumed",
+    selectedWhen: undefined,
+    disabledWhen: ["running", "stopped"]
+  },
+  {
+    path: "/api/queue/stop",
+    label: "Stop",
+    successMessage: "Worker stopped",
+    selectedWhen: "stopped",
+    disabledWhen: ["stopped"]
+  },
+  {
+    path: "/api/queue/retry-failed",
+    label: "Retry Failed",
+    successMessage: "Failed jobs queued for retry",
+    selectedWhen: undefined
+  }
+] as const;
+
+type QueueActionPath = typeof QUEUE_ACTIONS[number]["path"] | "/api/recruiters/bulk/deletable";
+type WorkerStatus = "running" | "paused" | "stopped" | "unknown";
 
 function formatLastUpdated(date: Date | null) {
   if (!date) return "Waiting for update";
   return `Updated ${date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
 }
 
+function normalizeWorkerStatus(status: string | undefined): WorkerStatus {
+  if (status === "running" || status === "paused" || status === "stopped") return status;
+  return "unknown";
+}
+
 export function Dashboard() {
   const [refresh, setRefresh] = React.useState(0);
   const { data, error, loading } = useApi<Stats>("/api/statistics", refresh);
-  const [actionLoading, setActionLoading] = React.useState<string | null>(null);
+  const [actionLoading, setActionLoading] = React.useState<QueueActionPath | null>(null);
   const [showDeleteRecruitersConfirm, setShowDeleteRecruitersConfirm] = React.useState(false);
   const [autoRefreshEnabled, setAutoRefreshEnabled] = React.useState(true);
   const [lastUpdatedAt, setLastUpdatedAt] = React.useState<Date | null>(null);
@@ -81,12 +125,12 @@ export function Dashboard() {
     setRefresh((value) => value + 1);
   };
 
-  const action = async (path: string) => {
+  const action = async (path: QueueActionPath, successMessage: string) => {
     setActionLoading(path);
     try {
       await api(path, { method: "POST" });
       setRefresh((value) => value + 1);
-      toast.success("Action executed successfully");
+      toast.success(successMessage);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Action failed");
     } finally {
@@ -123,6 +167,7 @@ export function Dashboard() {
 
   const totalQueue = pendingCount + sendingCount + sentCount + failedCount + retryingCount + pausedCount;
   const authStatus = data?.authStatus;
+  const workerStatus = normalizeWorkerStatus(data?.workerStatus);
 
   const filteredQueueItems = React.useMemo(() => {
     const rawItems = data?.queueItems ?? [];
@@ -223,30 +268,44 @@ export function Dashboard() {
         <StatCard label="Today's sent" value={data?.todaySent ?? 0} />
         <StatCard label="Pending" value={data?.pending ?? 0} />
         <StatCard label="Failed" value={data?.failed ?? 0} />
-        <StatCard label="Worker" value={data?.workerStatus ?? "unknown"} />
+        <StatCard label="Worker" value={workerStatus} />
       </div>
       <section className="panel">
         <div className="toolbar">
-          <button disabled={actionLoading !== null} onClick={() => action("/api/queue/start")}>
-            {actionLoading === "/api/queue/start" && <Spinner size={14} />}
-            Start
-          </button>
-          <button disabled={actionLoading !== null} onClick={() => action("/api/queue/pause")}>
-            {actionLoading === "/api/queue/pause" && <Spinner size={14} />}
-            Pause
-          </button>
-          <button disabled={actionLoading !== null} onClick={() => action("/api/queue/resume")}>
-            {actionLoading === "/api/queue/resume" && <Spinner size={14} />}
-            Resume
-          </button>
-          <button disabled={actionLoading !== null} onClick={() => action("/api/queue/stop")}>
-            {actionLoading === "/api/queue/stop" && <Spinner size={14} />}
-            Stop
-          </button>
-          <button disabled={actionLoading !== null} onClick={() => action("/api/queue/retry-failed")}>
-            {actionLoading === "/api/queue/retry-failed" && <Spinner size={14} />}
-            Retry Failed
-          </button>
+          {QUEUE_ACTIONS.map((queueAction) => {
+            const isLoadingAction = actionLoading === queueAction.path;
+            const isSelected = queueAction.selectedWhen === workerStatus;
+            const isUnavailableByWorker =
+              "disabledWhen" in queueAction &&
+              queueAction.disabledWhen.includes(workerStatus as never);
+            const isUnavailableByQueue = queueAction.path === "/api/queue/retry-failed" && failedCount === 0;
+            const isUnavailable = isUnavailableByWorker || isUnavailableByQueue;
+            const title = isUnavailableByQueue
+              ? "No failed jobs to retry"
+              : isSelected
+                ? `${queueAction.label} is the current worker state`
+                : undefined;
+
+            return (
+              <button
+                key={queueAction.path}
+                type="button"
+                className={`${isSelected ? "button-selected" : ""} ${isLoadingAction ? "button-loading" : ""}`.trim()}
+                aria-busy={isLoadingAction}
+                aria-disabled={isUnavailable || actionLoading !== null}
+                aria-pressed={isSelected}
+                disabled={actionLoading !== null}
+                title={title}
+                onClick={() => {
+                  if (isUnavailable || actionLoading !== null) return;
+                  void action(queueAction.path, queueAction.successMessage);
+                }}
+              >
+                {isLoadingAction && <Spinner size={14} />}
+                {queueAction.label}
+              </button>
+            );
+          })}
           <button
             className="danger-button"
             disabled={actionLoading !== null}
