@@ -29,6 +29,7 @@ export async function getStatistics() {
       id: emailQueue.id,
       state: emailQueue.state,
       attempts: emailQueue.attempts,
+      maxAttempts: emailQueue.maxAttempts,
       lastError: emailQueue.lastError,
       nextAttemptAt: emailQueue.nextAttemptAt,
       sentAt: emailQueue.sentAt,

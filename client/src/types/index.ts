@@ -23,6 +23,7 @@ export type QueueItem = {
   id: number;
   state: string;
   attempts: number;
+  maxAttempts: number;
   lastError: string | null;
   nextAttemptAt: string | null;
   sentAt: string | null;

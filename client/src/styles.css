@@ -2195,6 +2195,58 @@ th {
   border-color: var(--border);
 }
 
+.retry-modal-body {
+  gap: 18px;
+}
+
+.retry-modal-summary {
+  background: var(--warning-light-bg);
+  border: 1px solid var(--banner-border);
+  border-radius: 8px;
+  color: var(--banner-text-strong);
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+}
+
+.retry-modal-summary span,
+.retry-job-subtext {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.retry-attempt-control {
+  color: var(--text-muted-darker);
+  display: grid;
+  font-size: 13px;
+  font-weight: 650;
+  gap: 6px;
+  max-width: 220px;
+}
+
+.retry-jobs-table-wrap {
+  border: 1px solid var(--border-lighter);
+  border-radius: 8px;
+  max-height: 340px;
+  overflow: auto;
+}
+
+.retry-jobs-table th {
+  background: var(--bg-body);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.retry-error-text {
+  color: var(--error-text);
+  display: inline-block;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* ==========================================================================
    Toast Notification System
    ========================================================================== */
@@ -2402,6 +2454,11 @@ th {
     transform: translateY(0);
     opacity: 1;
   }
+}
+
+.modal-content.retry-modal {
+  max-width: 900px;
+  width: min(92vw, 900px);
 }
 
 /* ==========================================================================

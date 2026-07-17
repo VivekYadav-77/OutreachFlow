@@ -1,10 +1,18 @@
 import { and, asc, count, eq, inArray, lte, or, sql } from "drizzle-orm";
+import { z } from "zod";
 import { db } from "../database/db.js";
 import { campaignRecipients, emailDrafts, emailQueue, recruiters, emailDraftAttachments } from "../database/schema.js";
 import { QueueError, ValidationError } from "../utils/errors.js";
 import { createLog } from "../services/logService.js";
 import { getSettings, setWorkerStatus } from "../services/settingsService.js";
 import { getDefaultTemplate, getTemplate, renderTemplate } from "../services/templateService.js";
+
+export const retryFailedJobsSchema = z.object({
+  jobIds: z.array(z.coerce.number().int().positive()).min(1),
+  retryAttempts: z.coerce.number().int().min(1).max(3)
+});
+
+export type RetryFailedJobsInput = z.infer<typeof retryFailedJobsSchema>;
 
 export async function enqueuePendingRecruiters() {
   const settings = await getSettings();
@@ -76,6 +84,28 @@ export async function getQueueSummary() {
     acc[row.state] = row.value;
     return acc;
   }, {});
+}
+
+export async function getRetryableFailedJobs() {
+  return db
+    .select({
+      id: emailQueue.id,
+      state: emailQueue.state,
+      attempts: emailQueue.attempts,
+      maxAttempts: emailQueue.maxAttempts,
+      lastError: emailQueue.lastError,
+      updatedAt: emailQueue.updatedAt,
+      recruiterName: recruiters.fullName,
+      recruiterCompany: recruiters.company,
+      recruiterEmail: recruiters.email,
+      draftTo: emailDrafts.to,
+      draftSubject: emailDrafts.subject
+    })
+    .from(emailQueue)
+    .leftJoin(recruiters, eq(emailQueue.recruiterId, recruiters.id))
+    .leftJoin(emailDrafts, eq(emailQueue.draftId, emailDrafts.id))
+    .where(eq(emailQueue.state, "Failed"))
+    .orderBy(asc(emailQueue.updatedAt));
 }
 
 export async function pickNextJob() {
@@ -152,8 +182,35 @@ export async function stopQueue() {
   await createLog({ event: "worker.stopped", message: "Worker stopped" });
 }
 
-export async function retryFailedJobs() {
-  const result = await db.update(emailQueue).set({ state: "Pending", attempts: 0, lastError: null, nextAttemptAt: null, updatedAt: new Date() }).where(eq(emailQueue.state, "Failed")).returning();
-  await createLog({ event: "queue.retry_failed", message: `${result.length} failed job(s) queued for retry`, metadata: { count: result.length } });
+export async function retryFailedJobs(input: RetryFailedJobsInput) {
+  const parsed = retryFailedJobsSchema.parse(input);
+  const uniqueJobIds = [...new Set(parsed.jobIds)];
+  if (uniqueJobIds.length !== parsed.jobIds.length) {
+    throw new ValidationError("Duplicate queue jobs cannot be retried in the same request");
+  }
+
+  const jobs = await db.select().from(emailQueue).where(and(inArray(emailQueue.id, uniqueJobIds), eq(emailQueue.state, "Failed")));
+  if (jobs.length !== uniqueJobIds.length) {
+    throw new QueueError("Only failed queue jobs can be retried");
+  }
+
+  const result = await db
+    .update(emailQueue)
+    .set({
+      state: "Pending",
+      attempts: 0,
+      maxAttempts: parsed.retryAttempts,
+      lastError: null,
+      failureType: null,
+      nextAttemptAt: null,
+      updatedAt: new Date()
+    })
+    .where(and(inArray(emailQueue.id, uniqueJobIds), eq(emailQueue.state, "Failed")))
+    .returning();
+  await createLog({
+    event: "queue.retry_failed",
+    message: `${result.length} failed job(s) queued for retry`,
+    metadata: { count: result.length, jobIds: uniqueJobIds, retryAttempts: parsed.retryAttempts }
+  });
   return { queued: result.length };
 }

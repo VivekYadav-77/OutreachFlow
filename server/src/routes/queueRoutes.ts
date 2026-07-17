@@ -1,14 +1,23 @@
 import { Router } from "express";
 import { emailWorker } from "../workers/emailWorker.js";
-import { enqueuePendingRecruiters, getQueueSummary, pauseQueue, resumeQueue, retryFailedJobs, stopQueue } from "../queue/queueService.js";
+import { enqueuePendingRecruiters, getQueueSummary, getRetryableFailedJobs, pauseQueue, resumeQueue, retryFailedJobs, retryFailedJobsSchema, stopQueue } from "../queue/queueService.js";
 import { getGoogleConnectionStatus } from "../services/oauthConnectionService.js";
 import { AuthRequiredError } from "../utils/errors.js";
+import { validate } from "../middleware/validate.js";
 
 export const queueRoutes = Router();
 
 queueRoutes.get("/", async (_req, res, next) => {
   try {
     res.json({ ok: true, data: await getQueueSummary() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+queueRoutes.get("/failed", async (_req, res, next) => {
+  try {
+    res.json({ ok: true, data: await getRetryableFailedJobs() });
   } catch (error) {
     next(error);
   }
@@ -58,9 +67,9 @@ queueRoutes.post("/stop", async (_req, res, next) => {
   }
 });
 
-queueRoutes.post("/retry-failed", async (_req, res, next) => {
+queueRoutes.post("/retry-failed", validate("body", retryFailedJobsSchema), async (req, res, next) => {
   try {
-    res.json({ ok: true, data: await retryFailedJobs() });
+    res.json({ ok: true, data: await retryFailedJobs(req.body) });
   } catch (error) {
     next(error);
   }

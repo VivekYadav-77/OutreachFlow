@@ -27,6 +27,24 @@ type BulkDeleteRecruitersResult = {
   skipped: number;
 };
 
+type RetryableFailedJob = {
+  id: number;
+  state: "Failed";
+  attempts: number;
+  maxAttempts: number;
+  lastError: string | null;
+  updatedAt: string;
+  recruiterName: string | null;
+  recruiterCompany: string | null;
+  recruiterEmail: string | null;
+  draftTo: string[] | null;
+  draftSubject: string | null;
+};
+
+type RetryFailedJobsResult = {
+  queued: number;
+};
+
 const DASHBOARD_AUTO_REFRESH_MS = 5000;
 const QUEUE_ACTIONS = [
   {
@@ -83,6 +101,10 @@ export function Dashboard() {
   const { data, error, loading } = useApi<Stats>("/api/statistics", refresh);
   const [actionLoading, setActionLoading] = React.useState<QueueActionPath | null>(null);
   const [showDeleteRecruitersConfirm, setShowDeleteRecruitersConfirm] = React.useState(false);
+  const [showRetryFailedModal, setShowRetryFailedModal] = React.useState(false);
+  const [retryableJobs, setRetryableJobs] = React.useState<RetryableFailedJob[]>([]);
+  const [selectedRetryJobIds, setSelectedRetryJobIds] = React.useState<number[]>([]);
+  const [retryAttempts, setRetryAttempts] = React.useState(3);
   const [autoRefreshEnabled, setAutoRefreshEnabled] = React.useState(true);
   const [lastUpdatedAt, setLastUpdatedAt] = React.useState<Date | null>(null);
   const toast = useToast();
@@ -138,6 +160,73 @@ export function Dashboard() {
     }
   };
 
+  const openRetryFailedModal = async () => {
+    const actionKey = "/api/queue/retry-failed";
+    setActionLoading(actionKey);
+    try {
+      const jobs = await api<RetryableFailedJob[]>("/api/queue/failed");
+      if (jobs.length === 0) {
+        toast.warning("No failed jobs are available to retry.");
+        setRefresh((value) => value + 1);
+        return;
+      }
+      setRetryableJobs(jobs);
+      setSelectedRetryJobIds(jobs.map((job) => job.id));
+      setRetryAttempts(3);
+      setShowRetryFailedModal(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to load failed jobs");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const closeRetryFailedModal = () => {
+    if (actionLoading === "/api/queue/retry-failed") return;
+    setShowRetryFailedModal(false);
+    setRetryableJobs([]);
+    setSelectedRetryJobIds([]);
+  };
+
+  const toggleRetryJob = (jobId: number) => {
+    setSelectedRetryJobIds((current) =>
+      current.includes(jobId)
+        ? current.filter((id) => id !== jobId)
+        : [...current, jobId]
+    );
+  };
+
+  const toggleAllRetryJobs = () => {
+    setSelectedRetryJobIds((current) =>
+      current.length === retryableJobs.length ? [] : retryableJobs.map((job) => job.id)
+    );
+  };
+
+  const retrySelectedFailedJobs = async () => {
+    if (selectedRetryJobIds.length === 0) {
+      toast.warning("Select at least one failed job to retry.");
+      return;
+    }
+
+    const actionKey = "/api/queue/retry-failed";
+    setActionLoading(actionKey);
+    try {
+      const result = await api<RetryFailedJobsResult>(actionKey, {
+        method: "POST",
+        body: JSON.stringify({ jobIds: selectedRetryJobIds, retryAttempts })
+      });
+      setShowRetryFailedModal(false);
+      setRetryableJobs([]);
+      setSelectedRetryJobIds([]);
+      setRefresh((value) => value + 1);
+      toast.success(`${result.queued} failed job${result.queued === 1 ? "" : "s"} queued for retry.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to retry selected jobs");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const deleteDeletableRecruiters = async () => {
     const actionKey = "/api/recruiters/bulk/deletable";
     setActionLoading(actionKey);
@@ -168,6 +257,8 @@ export function Dashboard() {
   const totalQueue = pendingCount + sendingCount + sentCount + failedCount + retryingCount + pausedCount;
   const authStatus = data?.authStatus;
   const workerStatus = normalizeWorkerStatus(data?.workerStatus);
+  const selectedRetryCount = selectedRetryJobIds.length;
+  const allRetryJobsSelected = retryableJobs.length > 0 && selectedRetryCount === retryableJobs.length;
 
   const filteredQueueItems = React.useMemo(() => {
     const rawItems = data?.queueItems ?? [];
@@ -298,6 +389,10 @@ export function Dashboard() {
                 title={title}
                 onClick={() => {
                   if (isUnavailable || actionLoading !== null) return;
+                  if (queueAction.path === "/api/queue/retry-failed") {
+                    void openRetryFailedModal();
+                    return;
+                  }
                   void action(queueAction.path, queueAction.successMessage);
                 }}
               >
@@ -517,7 +612,7 @@ export function Dashboard() {
                       </div>
                     )}
                   </td>
-                  <td>{item.attempts} / 4</td>
+                  <td>{item.attempts} / {item.maxAttempts}</td>
                   <td>
                     {new Date(item.updatedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                   </td>
@@ -589,6 +684,102 @@ export function Dashboard() {
         confirmText="Delete all recruiter"
         isDestructive={true}
       />
+      {showRetryFailedModal && (
+        <div className="modal-overlay" onClick={closeRetryFailedModal}>
+          <div className="modal-content retry-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-title-wrapper">
+                <div className="modal-icon-destructive">
+                  <RefreshCw size={22} />
+                </div>
+                <h3 className="modal-title">Retry failed emails</h3>
+              </div>
+              <button className="modal-close" onClick={closeRetryFailedModal} aria-label="Close retry dialog">
+                <XCircle size={20} />
+              </button>
+            </div>
+            <div className="modal-body retry-modal-body">
+              <div className="retry-modal-summary">
+                <strong>{retryableJobs.length} failed job{retryableJobs.length === 1 ? "" : "s"} available</strong>
+                <span>Select which jobs to retry and choose how many attempts the worker may make for each one.</span>
+              </div>
+              <label className="retry-attempt-control">
+                Retry attempts
+                <select value={retryAttempts} onChange={(event) => setRetryAttempts(Number(event.target.value))}>
+                  <option value={1}>1 attempt</option>
+                  <option value={2}>2 attempts</option>
+                  <option value={3}>3 attempts</option>
+                </select>
+              </label>
+              <div className="retry-jobs-table-wrap">
+                <table className="retry-jobs-table">
+                  <thead>
+                    <tr>
+                      <th className="selection-cell">
+                        <input
+                          type="checkbox"
+                          className="selection-checkbox"
+                          checked={allRetryJobsSelected}
+                          onChange={toggleAllRetryJobs}
+                          aria-label="Select all failed jobs"
+                        />
+                      </th>
+                      <th>Recipient</th>
+                      <th>Attempts</th>
+                      <th>Error</th>
+                      <th>Failed at</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {retryableJobs.map((job) => {
+                      const recipient = job.recruiterEmail ?? job.draftTo?.join(", ") ?? "Unknown";
+                      const name = job.recruiterName ?? job.draftSubject ?? "Email job";
+                      return (
+                        <tr key={job.id}>
+                          <td className="selection-cell">
+                            <input
+                              type="checkbox"
+                              className="selection-checkbox"
+                              checked={selectedRetryJobIds.includes(job.id)}
+                              onChange={() => toggleRetryJob(job.id)}
+                              aria-label={`Select failed job ${job.id}`}
+                            />
+                          </td>
+                          <td>
+                            <strong>{name}</strong>
+                            <div className="retry-job-subtext">{recipient}</div>
+                            {job.recruiterCompany && <div className="retry-job-subtext">{job.recruiterCompany}</div>}
+                          </td>
+                          <td>{job.attempts} / {job.maxAttempts}</td>
+                          <td>
+                            <span className="retry-error-text" title={job.lastError ?? undefined}>
+                              {job.lastError ?? "Unknown failure"}
+                            </span>
+                          </td>
+                          <td>{new Date(job.updatedAt).toLocaleString()}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={closeRetryFailedModal}>
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary"
+                disabled={selectedRetryCount === 0 || actionLoading === "/api/queue/retry-failed"}
+                onClick={retrySelectedFailedJobs}
+              >
+                {actionLoading === "/api/queue/retry-failed" && <Spinner size={14} />}
+                Retry selected ({selectedRetryCount})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Page>
   );
 }
