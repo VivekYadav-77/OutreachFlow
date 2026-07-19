@@ -116,7 +116,7 @@ class EmailWorker {
           await markDraftSending(job.draftId);
           const email = await getComposedEmailWithAttachments(job.draftId);
           result = await emailService.sendComposedEmail(email);
-          await markDraftSent(job.draftId, result.providerMessageId);
+          await markDraftSent(job.draftId, result.providerMessageId, result.providerThreadId);
           logMessage = `Email sent to ${email.to.join(", ")}`;
         } else if (job.recruiterId) {
           const [recruiter] = await db.select().from(recruiters).where(eq(recruiters.id, job.recruiterId));
@@ -125,7 +125,7 @@ class EmailWorker {
         } else {
           throw new Error("Queue job is missing a draft");
         }
-        await markJobSent(job.id, result.providerMessageId);
+        await markJobSent(job.id, result.providerMessageId, result.providerThreadId);
         await incrementStats(true, Date.now() - started);
         await createLog({ event: "email.sent", message: logMessage, recruiterId, queueId: job.id, metadata: job.draftId ? { draftId: job.draftId } : {} });
       } catch (error) {

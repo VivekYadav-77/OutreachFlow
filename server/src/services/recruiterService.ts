@@ -10,6 +10,23 @@ import { createLog } from "./logService.js";
 import { getDefaultTemplate, getTemplate, renderTemplate } from "./templateService.js";
 import { getSettings } from "./settingsService.js";
 
+export const RECRUITER_STATUS_VALUES = [
+  "Pending",
+  "Sent",
+  "Failed",
+  "Replied",
+  "Skipped",
+  "NEW",
+  "QUEUED",
+  "SENDING",
+  "ACCEPTED_BY_GMAIL",
+  "REPLIED",
+  "TEMPORARY_FAILURE",
+  "INVALID_ADDRESS",
+  "SKIPPED",
+  "COMPLETED"
+] as const;
+
 export const recruiterSchema = z.object({
   fullName: z.string().min(1),
   company: z.string().min(1),
@@ -17,7 +34,7 @@ export const recruiterSchema = z.object({
   email: z.string().email().transform((value) => value.toLowerCase()),
   linkedin: z.string().optional().nullable(),
   notes: z.string().optional().default(""),
-  status: z.enum(["Pending", "Sent", "Failed", "Replied", "Skipped"]).optional().default("Pending"),
+  status: z.enum(RECRUITER_STATUS_VALUES).optional().default("Pending"),
   templateId: z.number().int().positive().optional().nullable()
 });
 
@@ -25,7 +42,7 @@ export const recruiterQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(25),
   search: z.string().optional(),
-  status: z.enum(["Pending", "Sent", "Failed", "Replied", "Skipped"]).optional()
+  status: z.enum(RECRUITER_STATUS_VALUES).optional()
 });
 
 export const bulkRecruiterIdsSchema = z.object({
@@ -72,7 +89,15 @@ export async function listRecruiters(query: z.infer<typeof recruiterQuerySchema>
     .orderBy(desc(recruiters.createdAt))
     .limit(parsed.pageSize)
     .offset((parsed.page - 1) * parsed.pageSize);
-  return { rows, total, page: parsed.page, pageSize: parsed.pageSize };
+  return {
+    rows: rows.map((row) => ({
+      ...row,
+      gmailThreadLink: row.lastGmailThreadId ? `https://mail.google.com/mail/u/0/#inbox/${encodeURIComponent(row.lastGmailThreadId)}` : null
+    })),
+    total,
+    page: parsed.page,
+    pageSize: parsed.pageSize
+  };
 }
 
 export async function getRecruiter(id: number) {

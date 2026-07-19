@@ -165,10 +165,10 @@ export async function markDraftSending(id: number) {
   await db.update(emailDrafts).set({ status: "Sending", updatedAt: new Date() }).where(eq(emailDrafts.id, id));
 }
 
-export async function markDraftSent(id: number, gmailMessageId?: string) {
+export async function markDraftSent(id: number, gmailMessageId?: string, gmailThreadId?: string) {
   await db
     .update(emailDrafts)
-    .set({ status: "Sent", gmailMessageId, sentAt: new Date(), lastError: null, updatedAt: new Date() })
+    .set({ status: "Sent", gmailMessageId, gmailThreadId, sentAt: new Date(), lastError: null, updatedAt: new Date() })
     .where(eq(emailDrafts.id, id));
 }
 

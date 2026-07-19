@@ -19,6 +19,37 @@ import {
 import type { BuiltEmail, EmailProvider, SendEmailResult } from "./emailProvider.js";
 
 const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
+const GMAIL_READONLY_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
+
+type GmailHeader = { name?: string | null; value?: string | null };
+type GmailMessagePart = {
+  filename?: string | null;
+  mimeType?: string | null;
+  body?: { attachmentId?: string | null; size?: number | null } | null;
+  parts?: GmailMessagePart[] | null;
+};
+
+export type GmailMessageMetadata = {
+  id: string;
+  threadId?: string;
+  snippet: string;
+  internalDate?: Date;
+  labelIds: string[];
+  headers: Record<string, string>;
+  payloadText: string;
+  attachments: Array<{ filename: string; mimeType?: string; size?: number }>;
+};
+
+export type GmailThreadMessage = GmailMessageMetadata & {
+  from?: string;
+  to?: string;
+  date?: Date;
+};
+
+export type GmailSentMessage = GmailMessageMetadata & {
+  recipients: Array<{ email: string; name?: string }>;
+  subject: string;
+};
 
 function encodeBase64Url(input: string | Buffer) {
   return Buffer.from(input).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -42,7 +73,7 @@ export function getGoogleAuthUrl() {
   return client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
-    scope: [GMAIL_SEND_SCOPE, "https://www.googleapis.com/auth/userinfo.email"]
+    scope: [GMAIL_SEND_SCOPE, GMAIL_READONLY_SCOPE, "https://www.googleapis.com/auth/userinfo.email"]
   });
 }
 
@@ -108,6 +139,7 @@ export async function getAuthStatus() {
     status: token?.status ?? "DISCONNECTED",
     emailAddress,
     scope: token?.scope,
+    readScopeGranted: token?.scope?.split(/\s+/).includes(GMAIL_READONLY_SCOPE) ?? false,
     lastConnectedAt: token?.lastConnectedAt,
     lastRefreshAt: token?.lastRefreshAt,
     lastAuthFailureAt: token?.lastAuthFailureAt,
@@ -191,7 +223,7 @@ export class GmailProvider implements EmailProvider {
         userId: "me",
         requestBody: { raw }
       });
-      return { providerMessageId: response.data.id ?? undefined };
+      return { providerMessageId: response.data.id ?? undefined, providerThreadId: response.data.threadId ?? undefined };
     } catch (error) {
       const authFailure = detectGoogleAuthFailure(error);
       if (authFailure.isAuthFailure) {
@@ -212,6 +244,142 @@ export class GmailProvider implements EmailProvider {
     if ([429, 500, 502, 503, 504].includes(status)) return "temporary";
     return "permanent";
   }
+
+  async getCurrentUserEmail() {
+    const auth = await getAuthorizedOAuthClient();
+    const oauth2 = google.oauth2({ version: "v2", auth });
+    const profile = await oauth2.userinfo.get();
+    return profile.data.email?.toLowerCase() ?? null;
+  }
+
+  async searchMessages(query: string, maxResults = 25, pageToken?: string) {
+    const auth = await getAuthorizedOAuthClient();
+    const gmail = google.gmail({ version: "v1", auth });
+    const response = await gmail.users.messages.list({
+      userId: "me",
+      q: query,
+      maxResults,
+      pageToken
+    });
+    return {
+      messages: (response.data.messages ?? []).map((message) => ({
+        id: message.id!,
+        threadId: message.threadId ?? undefined
+      })).filter((message) => message.id),
+      nextPageToken: response.data.nextPageToken ?? undefined
+    };
+  }
+
+  async getMessage(messageId: string): Promise<GmailMessageMetadata> {
+    const auth = await getAuthorizedOAuthClient();
+    const gmail = google.gmail({ version: "v1", auth });
+    const response = await gmail.users.messages.get({
+      userId: "me",
+      id: messageId,
+      format: "full"
+    });
+    return mapMessage(response.data);
+  }
+
+  async getThread(threadId: string): Promise<GmailThreadMessage[]> {
+    const auth = await getAuthorizedOAuthClient();
+    const gmail = google.gmail({ version: "v1", auth });
+    const response = await gmail.users.threads.get({
+      userId: "me",
+      id: threadId,
+      format: "full"
+    });
+    return (response.data.messages ?? []).map((message) => {
+      const mapped = mapMessage(message);
+      return {
+        ...mapped,
+        from: mapped.headers.from,
+        to: mapped.headers.to,
+        date: mapped.internalDate
+      };
+    });
+  }
+
+  async searchBounceMessages(maxResults = 25, pageToken?: string) {
+    return this.searchMessages('in:anywhere from:(mailer-daemon OR "Mail Delivery Subsystem") (subject:("Delivery Status Notification" OR "Delivery incomplete" OR "Undelivered Mail Returned to Sender" OR "Mail delivery failed") OR "550" OR "5.1.1")', maxResults, pageToken);
+  }
+
+  async listSentMessages(maxResults = 50, pageToken?: string) {
+    const result = await this.searchMessages("in:sent", maxResults, pageToken);
+    const messages = await Promise.all(result.messages.map(async (message) => this.getSentMessage(message.id)));
+    return { messages, nextPageToken: result.nextPageToken };
+  }
+
+  async getSentMessage(messageId: string): Promise<GmailSentMessage> {
+    const message = await this.getMessage(messageId);
+    return {
+      ...message,
+      recipients: parseAddressList(message.headers.to ?? ""),
+      subject: message.headers.subject ?? ""
+    };
+  }
+
+  getThreadLink(threadId: string) {
+    return `https://mail.google.com/mail/u/0/#inbox/${encodeURIComponent(threadId)}`;
+  }
 }
 
 export const gmailProvider = new GmailProvider();
+
+function decodeBase64Url(value: string) {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  return Buffer.from(normalized, "base64").toString("utf8");
+}
+
+function collectText(part: GmailMessagePart | null | undefined): string {
+  if (!part) return "";
+  const bodyData = (part.body as { data?: string } | undefined)?.data;
+  const ownText = bodyData && (part.mimeType === "text/plain" || part.mimeType === "text/html") ? decodeBase64Url(bodyData) : "";
+  const childText = (part.parts ?? []).map(collectText).filter(Boolean).join("\n");
+  return [ownText, childText].filter(Boolean).join("\n");
+}
+
+function collectAttachments(part: GmailMessagePart | null | undefined): Array<{ filename: string; mimeType?: string; size?: number }> {
+  if (!part) return [];
+  const current: Array<{ filename: string; mimeType?: string; size?: number }> = part.filename
+    ? [{ filename: part.filename, mimeType: part.mimeType ?? undefined, size: part.body?.size ?? undefined }]
+    : [];
+  return current.concat(...(part.parts ?? []).map(collectAttachments));
+}
+
+function headersToRecord(headers: GmailHeader[] | null | undefined) {
+  return (headers ?? []).reduce<Record<string, string>>((acc, item) => {
+    if (item.name && item.value) acc[item.name.toLowerCase()] = item.value;
+    return acc;
+  }, {});
+}
+
+function mapMessage(message: any): GmailMessageMetadata {
+  const headers = headersToRecord(message.payload?.headers);
+  return {
+    id: message.id,
+    threadId: message.threadId ?? undefined,
+    snippet: message.snippet ?? "",
+    internalDate: message.internalDate ? new Date(Number(message.internalDate)) : undefined,
+    labelIds: message.labelIds ?? [],
+    headers,
+    payloadText: collectText(message.payload),
+    attachments: collectAttachments(message.payload)
+  };
+}
+
+export function parseAddressList(value: string): Array<{ email: string; name?: string }> {
+  const output: Array<{ email: string; name?: string }> = [];
+  for (const rawValue of value.split(",")) {
+    const raw = rawValue.trim();
+    const bracketed = raw.match(/^(?:"?([^"<]*)"?)?\s*<([^<>\s]+@[^<>\s]+)>$/);
+    if (bracketed) {
+      const name = bracketed[1]?.trim() || undefined;
+      output.push({ email: bracketed[2].toLowerCase(), name });
+      continue;
+    }
+    const bare = raw.match(/^([^<>\s]+@[^<>\s]+)$/);
+    if (bare) output.push({ email: bare[1].toLowerCase() });
+  }
+  return output;
+}

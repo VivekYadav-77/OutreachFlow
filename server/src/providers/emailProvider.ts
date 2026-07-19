@@ -16,6 +16,7 @@ export type BuiltEmail = {
 
 export type SendEmailResult = {
   providerMessageId?: string;
+  providerThreadId?: string;
 };
 
 export type EmailProvider = {

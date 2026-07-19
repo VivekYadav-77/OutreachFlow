@@ -1,6 +1,6 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
-import { AlertTriangle, Pencil, RefreshCw, Trash2, X } from "lucide-react";
+import { AlertTriangle, ExternalLink, Pencil, Trash2, X } from "lucide-react";
 import { api, useApi, API_URL } from "../api/client";
 import { Page } from "../components/Page";
 import { useToast } from "../context/ToastContext";
@@ -23,6 +23,7 @@ type BulkAssignTemplateResult = {
 export function Recruiters() {
   const [refresh, setRefresh] = React.useState(0);
   const [search, setSearch] = React.useState("");
+  const [statusFilter, setStatusFilter] = React.useState("");
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(25);
   const recruiterQuery = React.useMemo(() => {
@@ -30,8 +31,9 @@ export function Recruiters() {
     params.set("page", String(page));
     params.set("pageSize", String(pageSize));
     if (search) params.set("search", search);
+    if (statusFilter) params.set("status", statusFilter);
     return params.toString();
-  }, [page, pageSize, search]);
+  }, [page, pageSize, search, statusFilter]);
   const { data } = useApi<{ rows: Recruiter[]; total: number; page: number; pageSize: number }>(`/api/recruiters?${recruiterQuery}`, refresh);
   const { data: templates } = useApi<Template[]>("/api/templates", refresh);
   const defaultTemplate = templates?.find((template) => template.isDefault) ?? templates?.[0];
@@ -68,7 +70,7 @@ export function Recruiters() {
 
   React.useEffect(() => {
     setPage(1);
-  }, [search]);
+  }, [search, statusFilter]);
 
   React.useEffect(() => {
     setSelectedRecruiterIds(new Set());
@@ -287,11 +289,38 @@ export function Recruiters() {
     return pages;
   };
 
+  const formatDateTime = (value?: string | null) => {
+    if (!value) return "-";
+    return new Date(value).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  };
+
   return (
     <Page title="Recruiters" actions={<a className={`button secondary ${isImporting ? "disabled" : ""}`} href={`${API_URL}/api/recruiters/export`}>Export CSV</a>}>
       <section className="panel">
         <div className="toolbar">
           <input placeholder="Search" value={search} onChange={(event) => setSearch(event.target.value)} disabled={isImporting} />
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+            disabled={isImporting}
+            style={{ maxWidth: "190px" }}
+          >
+            <option value="">All statuses</option>
+            <option value="Pending">Pending</option>
+            <option value="NEW">New</option>
+            <option value="QUEUED">Queued</option>
+            <option value="SENDING">Sending</option>
+            <option value="Sent">Sent</option>
+            <option value="ACCEPTED_BY_GMAIL">Accepted by Gmail</option>
+            <option value="Replied">Replied</option>
+            <option value="REPLIED">Reply received</option>
+            <option value="TEMPORARY_FAILURE">Temporary failure</option>
+            <option value="Failed">Failed</option>
+            <option value="INVALID_ADDRESS">Invalid address</option>
+            <option value="Skipped">Skipped</option>
+            <option value="SKIPPED">Skipped lifecycle</option>
+            <option value="COMPLETED">Completed</option>
+          </select>
           <select
             value={pageSize}
             onChange={(event) => {
@@ -447,16 +476,21 @@ export function Recruiters() {
                   onChange={toggleVisibleSelection}
                 />
               </th>
+              <th style={{ width: "72px" }}>S.No</th>
               <th>Name</th>
               <th>Company</th>
               <th>Email</th>
               <th>Template</th>
               <th>Status</th>
+              <th>Last Sent</th>
+              <th>Last Reply</th>
+              <th>Last Bounce</th>
+              <th>Thread</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {(data?.rows ?? []).map((row) => (
+            {(data?.rows ?? []).map((row, index) => (
               <tr key={row.id}>
                 <td className="selection-cell">
                   <input
@@ -468,6 +502,7 @@ export function Recruiters() {
                     onChange={() => toggleRecruiterSelection(row.id)}
                   />
                 </td>
+                <td>{firstVisible + index}</td>
                 <td>{row.fullName}</td>
                 <td>{row.company}</td>
                 <td>{row.email}</td>
@@ -476,6 +511,18 @@ export function Recruiters() {
                 </td>
                 <td>
                   <span className={`status-${row.status.toLowerCase()}`}>{row.status}</span>
+                </td>
+                <td>{formatDateTime(row.lastEmailSentAt)}</td>
+                <td>{formatDateTime(row.lastReplyAt)}</td>
+                <td>{formatDateTime(row.lastBounceAt)}</td>
+                <td>
+                  {row.gmailThreadLink ? (
+                    <a href={row.gmailThreadLink} target="_blank" rel="noreferrer" className="action-btn" title="Open Gmail thread">
+                      <ExternalLink size={14} />
+                    </a>
+                  ) : (
+                    "-"
+                  )}
                 </td>
                 <td>
                   <div className="action-buttons-cell">
@@ -503,7 +550,7 @@ export function Recruiters() {
             ))}
             {(!data?.rows || data.rows.length === 0) && (
               <tr>
-                <td colSpan={7} style={{ textAlign: "center", color: "var(--text-muted)", padding: "20px" }}>
+                <td colSpan={12} style={{ textAlign: "center", color: "var(--text-muted)", padding: "20px" }}>
                   No recruiters found.
                 </td>
               </tr>

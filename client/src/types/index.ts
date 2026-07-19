@@ -11,6 +11,7 @@ export type AuthStatus = {
   status: "CONNECTED" | "AUTH_REQUIRED" | "CONNECTING" | "DISCONNECTED" | "ERROR";
   emailAddress: string | null;
   scope?: string;
+  readScopeGranted?: boolean;
   lastConnectedAt?: string | null;
   lastRefreshAt?: string | null;
   lastAuthFailureAt?: string | null;
@@ -39,6 +40,11 @@ export type Stats = {
   pending: number;
   failed: number;
   retries: number;
+  replies: number;
+  bounces: number;
+  temporaryFailures: number;
+  invalidAddresses: number;
+  queuedRecruiters: number;
   successRate: number;
   averageSendTimeMs: number;
   remainingRecruiters: number;
@@ -57,6 +63,32 @@ export type Recruiter = {
   email: string;
   status: string;
   templateId?: number | null;
+  lastEmailSentAt?: string | null;
+  lastReplyAt?: string | null;
+  lastBounceAt?: string | null;
+  lastGmailThreadId?: string | null;
+  lastGmailMessageId?: string | null;
+  gmailThreadLink?: string | null;
+};
+
+export type MonitorSummary = {
+  processed?: number;
+  trackedThreads?: number;
+  checked?: number;
+  detected: number;
+  permanent?: number;
+  temporary?: number;
+  duplicates: number;
+  skipped: number;
+};
+
+export type SentImportSummary = {
+  processed: number;
+  imported: number;
+  updated: number;
+  duplicates: number;
+  skipped: number;
+  errors: number;
 };
 
 export type Template = {

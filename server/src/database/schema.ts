@@ -11,7 +11,22 @@ import {
   uniqueIndex
 } from "drizzle-orm/pg-core";
 
-export const recruiterStatus = pgEnum("recruiter_status", ["Pending", "Sent", "Failed", "Replied", "Skipped"]);
+export const recruiterStatus = pgEnum("recruiter_status", [
+  "Pending",
+  "Sent",
+  "Failed",
+  "Replied",
+  "Skipped",
+  "NEW",
+  "QUEUED",
+  "SENDING",
+  "ACCEPTED_BY_GMAIL",
+  "REPLIED",
+  "TEMPORARY_FAILURE",
+  "INVALID_ADDRESS",
+  "SKIPPED",
+  "COMPLETED"
+]);
 export const queueState = pgEnum("queue_state", ["Pending", "Sending", "Sent", "Failed", "Retrying", "Paused"]);
 export const logLevel = pgEnum("log_level", ["info", "warn", "error"]);
 export const campaignStatus = pgEnum("campaign_status", ["Draft", "Scheduled", "Running", "Paused", "PAUSED_AUTH", "Completed", "Cancelled"]);
@@ -43,6 +58,12 @@ export const recruiters = pgTable(
     notes: text("notes").notNull().default(""),
     status: recruiterStatus("status").notNull().default("Pending"),
     templateId: integer("template_id").references(() => emailTemplates.id, { onDelete: "set null" }),
+    lastEmailSentAt: timestamp("last_email_sent_at", { withTimezone: true }),
+    lastReplyAt: timestamp("last_reply_at", { withTimezone: true }),
+    lastBounceAt: timestamp("last_bounce_at", { withTimezone: true }),
+    lastGmailThreadId: text("last_gmail_thread_id"),
+    lastGmailMessageId: text("last_gmail_message_id"),
+    importedFromGmail: boolean("imported_from_gmail").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
   },
@@ -74,6 +95,7 @@ export const emailDrafts = pgTable("email_drafts", {
   status: emailDraftStatus("status").notNull().default("Draft"),
   lastError: text("last_error"),
   gmailMessageId: text("gmail_message_id"),
+  gmailThreadId: text("gmail_thread_id"),
   queuedAt: timestamp("queued_at", { withTimezone: true }),
   sentAt: timestamp("sent_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -164,6 +186,7 @@ export const emailQueue = pgTable("email_queue", {
   lastError: text("last_error"),
   failureType: failureType("failure_type"),
   gmailMessageId: text("gmail_message_id"),
+  gmailThreadId: text("gmail_thread_id"),
   claimedAt: timestamp("claimed_at", { withTimezone: true }),
   lockedBy: text("locked_by"),
   nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
@@ -225,6 +248,89 @@ export const dailyStats = pgTable("daily_stats", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
 });
 
+export const emailActivity = pgTable(
+  "email_activity",
+  {
+    id: serial("id").primaryKey(),
+    eventType: text("event_type").notNull(),
+    recruiterId: integer("recruiter_id").references(() => recruiters.id, { onDelete: "set null" }),
+    campaignId: integer("campaign_id").references(() => campaigns.id, { onDelete: "set null" }),
+    campaignRecipientId: integer("campaign_recipient_id").references(() => campaignRecipients.id, { onDelete: "set null" }),
+    queueId: integer("queue_id").references(() => emailQueue.id, { onDelete: "set null" }),
+    draftId: integer("draft_id").references(() => emailDrafts.id, { onDelete: "set null" }),
+    gmailMessageId: text("gmail_message_id"),
+    gmailThreadId: text("gmail_thread_id"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => ({
+    messageEventUnique: uniqueIndex("email_activity_message_event_unique").on(table.gmailMessageId, table.eventType)
+  })
+);
+
+export const emailReply = pgTable(
+  "email_reply",
+  {
+    id: serial("id").primaryKey(),
+    recruiterId: integer("recruiter_id").references(() => recruiters.id, { onDelete: "cascade" }),
+    campaignId: integer("campaign_id").references(() => campaigns.id, { onDelete: "set null" }),
+    gmailMessageId: text("gmail_message_id").notNull(),
+    gmailThreadId: text("gmail_thread_id").notNull(),
+    sender: text("sender").notNull(),
+    preview: text("preview").notNull().default(""),
+    repliedAt: timestamp("replied_at", { withTimezone: true }).notNull(),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => ({
+    gmailMessageUnique: uniqueIndex("email_reply_gmail_message_unique").on(table.gmailMessageId)
+  })
+);
+
+export const emailBounce = pgTable(
+  "email_bounce",
+  {
+    id: serial("id").primaryKey(),
+    recruiterId: integer("recruiter_id").references(() => recruiters.id, { onDelete: "set null" }),
+    campaignId: integer("campaign_id").references(() => campaigns.id, { onDelete: "set null" }),
+    recipientEmail: text("recipient_email").notNull(),
+    bounceType: text("bounce_type").notNull(),
+    reason: text("reason").notNull().default(""),
+    smtpCode: text("smtp_code"),
+    gmailMessageId: text("gmail_message_id").notNull(),
+    gmailThreadId: text("gmail_thread_id"),
+    bouncedAt: timestamp("bounced_at", { withTimezone: true }).notNull(),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => ({
+    gmailMessageRecipientUnique: uniqueIndex("email_bounce_gmail_message_recipient_unique").on(table.gmailMessageId, table.recipientEmail)
+  })
+);
+
+export const gmailImportHistory = pgTable(
+  "gmail_import_history",
+  {
+    id: serial("id").primaryKey(),
+    gmailMessageId: text("gmail_message_id").notNull(),
+    gmailThreadId: text("gmail_thread_id"),
+    recruiterId: integer("recruiter_id").references(() => recruiters.id, { onDelete: "set null" }),
+    campaignId: integer("campaign_id").references(() => campaigns.id, { onDelete: "set null" }),
+    recipientEmail: text("recipient_email").notNull(),
+    recipientName: text("recipient_name"),
+    subject: text("subject").notNull().default(""),
+    snippet: text("snippet").notNull().default(""),
+    sentAt: timestamp("sent_at", { withTimezone: true }).notNull(),
+    labels: jsonb("labels").$type<string[]>().notNull().default([]),
+    attachments: jsonb("attachments").$type<Array<Record<string, unknown>>>().notNull().default([]),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+  },
+  (table) => ({
+    gmailMessageUnique: uniqueIndex("gmail_import_history_message_unique").on(table.gmailMessageId)
+  })
+);
+
 export const campaignDailyStats = pgTable(
   "campaign_daily_stats",
   {
@@ -256,3 +362,5 @@ export type AppSettings = typeof settings.$inferSelect;
 export type Campaign = typeof campaigns.$inferSelect;
 export type NewCampaign = typeof campaigns.$inferInsert;
 export type CampaignRecipient = typeof campaignRecipients.$inferSelect;
+export type EmailActivity = typeof emailActivity.$inferSelect;
+export type NewEmailActivity = typeof emailActivity.$inferInsert;
