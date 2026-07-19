@@ -2,6 +2,7 @@ import { NavLink, Route, Routes } from "react-router-dom";
 import {
   BarChart3,
   FileText,
+  History,
   LayoutDashboard,
   ListChecks,
   Mail,
@@ -16,10 +17,12 @@ import { CoverLetterGenerator } from "../pages/CoverLetterGenerator";
 import { SettingsPage } from "../pages/Settings";
 import { Logs } from "../pages/Logs";
 import { Statistics } from "../pages/Statistics";
+import { EmailActivity } from "../pages/EmailActivity";
 
 export function Shell() {
   const nav = [
     { to: "/", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/email-activity", label: "Email Activity", icon: History },
     { to: "/recruiters", label: "Recruiters", icon: Mail },
     { to: "/compose", label: "Templates", icon: Mail },
     { to: "/cover-letter", label: "Cover Letters", icon: FileText },
@@ -50,6 +53,7 @@ export function Shell() {
       <main>
         <Routes>
           <Route path="/" element={<Dashboard />} />
+          <Route path="/email-activity" element={<EmailActivity />} />
           <Route path="/recruiters" element={<Recruiters />} />
           <Route path="/compose" element={<Compose />} />
           <Route path="/cover-letter" element={<CoverLetterGenerator />} />

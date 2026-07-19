@@ -6,10 +6,8 @@ import {
   Inbox,
   List,
   ListChecks,
-  MailCheck,
   Pause,
   RefreshCw,
-  Reply,
   Search,
   Send,
   Trash2,
@@ -22,7 +20,7 @@ import { GoogleAuthStatus } from "../components/GoogleAuthStatus";
 import { useToast } from "../context/ToastContext";
 import { Spinner } from "../components/Spinner";
 import { ConfirmModal } from "../components/ConfirmModal";
-import type { MonitorSummary, SentImportSummary, Stats, QueueItem } from "../types";
+import type { Stats, QueueItem } from "../types";
 
 type BulkDeleteRecruitersResult = {
   deleted: number;
@@ -87,10 +85,7 @@ const QUEUE_ACTIONS = [
 
 type QueueActionPath =
   | typeof QUEUE_ACTIONS[number]["path"]
-  | "/api/recruiters/bulk/deletable"
-  | "/api/email-monitor/check-replies"
-  | "/api/email-monitor/check-bounces"
-  | "/api/email-import/sent";
+  | "/api/recruiters/bulk/deletable";
 type WorkerStatus = "running" | "paused" | "stopped" | "unknown";
 
 function formatLastUpdated(date: Date | null) {
@@ -162,51 +157,6 @@ export function Dashboard() {
       toast.success(successMessage);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Action failed");
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const checkReplies = async () => {
-    const actionKey = "/api/email-monitor/check-replies";
-    setActionLoading(actionKey);
-    try {
-      const result = await api<MonitorSummary>(actionKey, { method: "POST" });
-      setRefresh((value) => value + 1);
-      toast.success(`Detected ${result.detected} repl${result.detected === 1 ? "y" : "ies"}${result.duplicates ? `, skipped ${result.duplicates} duplicate${result.duplicates === 1 ? "" : "s"}` : ""}.`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to check replies");
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const checkBounces = async () => {
-    const actionKey = "/api/email-monitor/check-bounces";
-    setActionLoading(actionKey);
-    try {
-      const result = await api<MonitorSummary>(actionKey, { method: "POST" });
-      setRefresh((value) => value + 1);
-      toast.success(`Detected ${result.detected} bounce${result.detected === 1 ? "" : "s"} (${result.permanent ?? 0} permanent, ${result.temporary ?? 0} temporary).`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to check bounces");
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const importSentEmails = async () => {
-    const actionKey = "/api/email-import/sent";
-    setActionLoading(actionKey);
-    try {
-      const result = await api<SentImportSummary>(actionKey, {
-        method: "POST",
-        body: JSON.stringify({ maxMessages: 250 })
-      });
-      setRefresh((value) => value + 1);
-      toast.success(`Imported ${result.imported}, updated ${result.updated}, skipped ${result.duplicates} duplicate${result.duplicates === 1 ? "" : "s"}.`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to import sent emails");
     } finally {
       setActionLoading(null);
     }
@@ -412,43 +362,9 @@ export function Dashboard() {
         <StatCard label="Pending" value={data?.pending ?? 0} />
         <StatCard label="Failed" value={data?.failed ?? 0} />
         <StatCard label="Worker" value={workerStatus} />
-        <StatCard label="Replies" value={data?.replies ?? 0} />
-        <StatCard label="Invalid addresses" value={data?.invalidAddresses ?? 0} />
-        <StatCard label="Temporary failures" value={data?.temporaryFailures ?? 0} />
-        <StatCard label="Queued recruiters" value={data?.queuedRecruiters ?? 0} />
       </div>
       <section className="panel">
         <div className="toolbar">
-          <button
-            type="button"
-            className="secondary"
-            disabled={actionLoading !== null}
-            title={authStatus?.readScopeGranted === false ? "Reconnect Google to grant Gmail read access" : undefined}
-            onClick={checkReplies}
-          >
-            {actionLoading === "/api/email-monitor/check-replies" ? <Spinner size={14} /> : <Reply size={14} />}
-            Check Replies
-          </button>
-          <button
-            type="button"
-            className="secondary"
-            disabled={actionLoading !== null}
-            title={authStatus?.readScopeGranted === false ? "Reconnect Google to grant Gmail read access" : undefined}
-            onClick={checkBounces}
-          >
-            {actionLoading === "/api/email-monitor/check-bounces" ? <Spinner size={14} /> : <MailCheck size={14} />}
-            Check Bounces
-          </button>
-          <button
-            type="button"
-            className="secondary"
-            disabled={actionLoading !== null}
-            title={authStatus?.readScopeGranted === false ? "Reconnect Google to grant Gmail read access" : undefined}
-            onClick={importSentEmails}
-          >
-            {actionLoading === "/api/email-import/sent" ? <Spinner size={14} /> : <Inbox size={14} />}
-            Import Sent Emails
-          </button>
           {QUEUE_ACTIONS.map((queueAction) => {
             const isLoadingAction = actionLoading === queueAction.path;
             const isSelected = queueAction.selectedWhen === workerStatus;

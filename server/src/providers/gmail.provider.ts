@@ -166,6 +166,19 @@ async function getAuthorizedOAuthClient() {
   return client;
 }
 
+function throwIfGoogleAuthFailure(error: unknown) {
+  const authFailure = detectGoogleAuthFailure(error);
+  if (!authFailure.isAuthFailure) return;
+  const message = authFailure.code === "insufficient_scope"
+    ? "Google read access is required. Reconnect your Google account to grant Gmail read permission."
+    : "Google authorization expired. Reconnect your account.";
+  throw new AuthRequiredError(message, {
+    reason: authFailure.reason,
+    code: authFailure.code,
+    status: authFailure.status
+  });
+}
+
 export async function createGmailMimeMessage(input: BuiltEmail) {
   const boundary = `boundary_${Date.now()}`;
   const altBoundary = `alt_${Date.now()}`;
@@ -246,58 +259,78 @@ export class GmailProvider implements EmailProvider {
   }
 
   async getCurrentUserEmail() {
-    const auth = await getAuthorizedOAuthClient();
-    const oauth2 = google.oauth2({ version: "v2", auth });
-    const profile = await oauth2.userinfo.get();
-    return profile.data.email?.toLowerCase() ?? null;
+    try {
+      const auth = await getAuthorizedOAuthClient();
+      const oauth2 = google.oauth2({ version: "v2", auth });
+      const profile = await oauth2.userinfo.get();
+      return profile.data.email?.toLowerCase() ?? null;
+    } catch (error) {
+      throwIfGoogleAuthFailure(error);
+      throw error;
+    }
   }
 
   async searchMessages(query: string, maxResults = 25, pageToken?: string) {
-    const auth = await getAuthorizedOAuthClient();
-    const gmail = google.gmail({ version: "v1", auth });
-    const response = await gmail.users.messages.list({
-      userId: "me",
-      q: query,
-      maxResults,
-      pageToken
-    });
-    return {
-      messages: (response.data.messages ?? []).map((message) => ({
-        id: message.id!,
-        threadId: message.threadId ?? undefined
-      })).filter((message) => message.id),
-      nextPageToken: response.data.nextPageToken ?? undefined
-    };
+    try {
+      const auth = await getAuthorizedOAuthClient();
+      const gmail = google.gmail({ version: "v1", auth });
+      const response = await gmail.users.messages.list({
+        userId: "me",
+        q: query,
+        maxResults,
+        pageToken
+      });
+      return {
+        messages: (response.data.messages ?? []).map((message) => ({
+          id: message.id!,
+          threadId: message.threadId ?? undefined
+        })).filter((message) => message.id),
+        nextPageToken: response.data.nextPageToken ?? undefined
+      };
+    } catch (error) {
+      throwIfGoogleAuthFailure(error);
+      throw error;
+    }
   }
 
   async getMessage(messageId: string): Promise<GmailMessageMetadata> {
-    const auth = await getAuthorizedOAuthClient();
-    const gmail = google.gmail({ version: "v1", auth });
-    const response = await gmail.users.messages.get({
-      userId: "me",
-      id: messageId,
-      format: "full"
-    });
-    return mapMessage(response.data);
+    try {
+      const auth = await getAuthorizedOAuthClient();
+      const gmail = google.gmail({ version: "v1", auth });
+      const response = await gmail.users.messages.get({
+        userId: "me",
+        id: messageId,
+        format: "full"
+      });
+      return mapMessage(response.data);
+    } catch (error) {
+      throwIfGoogleAuthFailure(error);
+      throw error;
+    }
   }
 
   async getThread(threadId: string): Promise<GmailThreadMessage[]> {
-    const auth = await getAuthorizedOAuthClient();
-    const gmail = google.gmail({ version: "v1", auth });
-    const response = await gmail.users.threads.get({
-      userId: "me",
-      id: threadId,
-      format: "full"
-    });
-    return (response.data.messages ?? []).map((message) => {
-      const mapped = mapMessage(message);
-      return {
-        ...mapped,
-        from: mapped.headers.from,
-        to: mapped.headers.to,
-        date: mapped.internalDate
-      };
-    });
+    try {
+      const auth = await getAuthorizedOAuthClient();
+      const gmail = google.gmail({ version: "v1", auth });
+      const response = await gmail.users.threads.get({
+        userId: "me",
+        id: threadId,
+        format: "full"
+      });
+      return (response.data.messages ?? []).map((message) => {
+        const mapped = mapMessage(message);
+        return {
+          ...mapped,
+          from: mapped.headers.from,
+          to: mapped.headers.to,
+          date: mapped.internalDate
+        };
+      });
+    } catch (error) {
+      throwIfGoogleAuthFailure(error);
+      throw error;
+    }
   }
 
   async searchBounceMessages(maxResults = 25, pageToken?: string) {

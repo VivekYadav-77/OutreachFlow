@@ -1,12 +1,12 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
-import { AlertTriangle, ExternalLink, Pencil, Trash2, X } from "lucide-react";
+import { AlertTriangle, ExternalLink, Eye, Pencil, Trash2, X } from "lucide-react";
 import { api, useApi, API_URL } from "../api/client";
 import { Page } from "../components/Page";
 import { useToast } from "../context/ToastContext";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { Spinner } from "../components/Spinner";
-import type { Recruiter, Template, ImportResult } from "../types";
+import type { EmailActivityItem, Recruiter, RecruiterActivityDetails, Template, ImportResult } from "../types";
 
 type BulkDeleteRecruitersResult = {
   deleted: number;
@@ -48,6 +48,9 @@ export function Recruiters() {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [deletingId, setDeletingId] = React.useState<number | null>(null);
   const [editingRecruiter, setEditingRecruiter] = React.useState<Recruiter | null>(null);
+  const [activityRecruiter, setActivityRecruiter] = React.useState<Recruiter | null>(null);
+  const [activityDetails, setActivityDetails] = React.useState<RecruiterActivityDetails | null>(null);
+  const [activityLoading, setActivityLoading] = React.useState(false);
   const [editForm, setEditForm] = React.useState({ fullName: "", company: "", email: "", designation: "", templateId: "" });
   const [editError, setEditError] = React.useState("");
   const [editSubmitting, setEditSubmitting] = React.useState(false);
@@ -289,10 +292,26 @@ export function Recruiters() {
     return pages;
   };
 
+  const openActivityDetails = async (recruiter: Recruiter) => {
+    setActivityRecruiter(recruiter);
+    setActivityDetails(null);
+    setActivityLoading(true);
+    try {
+      setActivityDetails(await api<RecruiterActivityDetails>(`/api/recruiters/${recruiter.id}/activity`));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to load recruiter activity");
+    } finally {
+      setActivityLoading(false);
+    }
+  };
+
   const formatDateTime = (value?: string | null) => {
     if (!value) return "-";
     return new Date(value).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
   };
+
+  const formatEventType = (value: string) =>
+    value.toLowerCase().split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
 
   return (
     <Page title="Recruiters" actions={<a className={`button secondary ${isImporting ? "disabled" : ""}`} href={`${API_URL}/api/recruiters/export`}>Export CSV</a>}>
@@ -482,10 +501,6 @@ export function Recruiters() {
               <th>Email</th>
               <th>Template</th>
               <th>Status</th>
-              <th>Last Sent</th>
-              <th>Last Reply</th>
-              <th>Last Bounce</th>
-              <th>Thread</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -512,20 +527,17 @@ export function Recruiters() {
                 <td>
                   <span className={`status-${row.status.toLowerCase()}`}>{row.status}</span>
                 </td>
-                <td>{formatDateTime(row.lastEmailSentAt)}</td>
-                <td>{formatDateTime(row.lastReplyAt)}</td>
-                <td>{formatDateTime(row.lastBounceAt)}</td>
-                <td>
-                  {row.gmailThreadLink ? (
-                    <a href={row.gmailThreadLink} target="_blank" rel="noreferrer" className="action-btn" title="Open Gmail thread">
-                      <ExternalLink size={14} />
-                    </a>
-                  ) : (
-                    "-"
-                  )}
-                </td>
                 <td>
                   <div className="action-buttons-cell">
+                    <button
+                      type="button"
+                      className="action-btn"
+                      title="View Activity"
+                      disabled={deletingId !== null || bulkDeleting || bulkAssigning}
+                      onClick={() => openActivityDetails(row)}
+                    >
+                      <Eye size={14} />
+                    </button>
                     <button
                       type="button"
                       className="action-btn"
@@ -550,7 +562,7 @@ export function Recruiters() {
             ))}
             {(!data?.rows || data.rows.length === 0) && (
               <tr>
-                <td colSpan={12} style={{ textAlign: "center", color: "var(--text-muted)", padding: "20px" }}>
+                <td colSpan={8} style={{ textAlign: "center", color: "var(--text-muted)", padding: "20px" }}>
                   No recruiters found.
                 </td>
               </tr>
@@ -645,6 +657,71 @@ export function Recruiters() {
                   <button type="button" className="secondary" disabled={editSubmitting} onClick={() => setEditingRecruiter(null)}>Cancel</button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activityRecruiter && (
+        <div className="modal-overlay" onClick={() => setActivityRecruiter(null)}>
+          <div className="modal-content recruiter-activity-modal" onClick={(event) => event.stopPropagation()}>
+            <div className="modal-header">
+              <h2>Recruiter Activity</h2>
+              <button className="modal-close" onClick={() => setActivityRecruiter(null)} aria-label="Close activity dialog"><X size={22} /></button>
+            </div>
+            <div className="modal-body recruiter-activity-body">
+              <div className="recruiter-activity-header">
+                <div>
+                  <strong>{activityRecruiter.fullName}</strong>
+                  <span>{activityRecruiter.email}</span>
+                  <span>{activityRecruiter.company}</span>
+                </div>
+                <span className={`status-${activityRecruiter.status.toLowerCase()}`}>{activityRecruiter.status}</span>
+              </div>
+              <div className="recruiter-activity-stats">
+                <div><span>Last Sent</span><strong>{formatDateTime(activityDetails?.recruiter?.lastEmailSentAt ?? activityRecruiter.lastEmailSentAt)}</strong></div>
+                <div><span>Last Reply</span><strong>{formatDateTime(activityDetails?.recruiter?.lastReplyAt ?? activityRecruiter.lastReplyAt)}</strong></div>
+                <div><span>Last Bounce</span><strong>{formatDateTime(activityDetails?.recruiter?.lastBounceAt ?? activityRecruiter.lastBounceAt)}</strong></div>
+                <div>
+                  <span>Gmail Thread</span>
+                  {activityDetails?.recruiter?.gmailThreadLink || activityRecruiter.gmailThreadLink ? (
+                    <a href={activityDetails?.recruiter?.gmailThreadLink ?? activityRecruiter.gmailThreadLink ?? undefined} target="_blank" rel="noreferrer">
+                      Open thread <ExternalLink size={13} />
+                    </a>
+                  ) : (
+                    <strong>-</strong>
+                  )}
+                </div>
+              </div>
+              {activityLoading ? (
+                <div className="activity-loading"><Spinner size={18} /> Loading activity...</div>
+              ) : (
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Event</th>
+                      <th>Details</th>
+                      <th>Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(activityDetails?.activities ?? []).map((item: EmailActivityItem) => (
+                      <tr key={item.id}>
+                        <td>{formatEventType(item.eventType)}</td>
+                        <td className="activity-metadata">
+                          {Object.entries(item.metadata ?? {}).slice(0, 3).map(([key, value]) => `${key}: ${String(value)}`).join(" · ") || "-"}
+                        </td>
+                        <td>{formatDateTime(item.createdAt)}</td>
+                      </tr>
+                    ))}
+                    {(!activityDetails?.activities || activityDetails.activities.length === 0) && (
+                      <tr>
+                        <td colSpan={3} style={{ textAlign: "center", color: "var(--text-muted)", padding: "18px" }}>No activity recorded yet.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         </div>

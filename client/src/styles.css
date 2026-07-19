@@ -2247,6 +2247,268 @@ th {
   white-space: nowrap;
 }
 
+.activity-summary-grid {
+  margin-bottom: 18px;
+}
+
+.activity-action-panel {
+  align-items: center;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.activity-action-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.activity-action-copy p {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin: 0;
+  max-width: 620px;
+}
+
+.activity-action-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.activity-table-header {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.activity-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.activity-tabs button {
+  min-height: 34px;
+  padding: 0 12px;
+}
+
+.activity-search {
+  align-items: center;
+  background: var(--bg-body);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: flex;
+  gap: 8px;
+  min-width: 280px;
+  padding: 0 10px;
+}
+
+.activity-search input {
+  background: transparent;
+  border: 0;
+  min-height: 36px;
+  padding: 0;
+}
+
+.activity-subtext,
+.activity-metadata {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.activity-metadata {
+  display: inline-block;
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity-result-modal {
+  max-width: 620px;
+}
+
+.activity-result-body {
+  gap: 18px;
+}
+
+.activity-result-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.activity-result-stat {
+  background: var(--bg-body);
+  border: 1px solid var(--border-lighter);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+}
+
+.activity-result-stat strong {
+  font-size: 24px;
+}
+
+.activity-result-stat span {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 650;
+  text-transform: uppercase;
+}
+
+.activity-result-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.recruiter-activity-modal {
+  max-width: 820px;
+}
+
+.recruiter-activity-body {
+  gap: 18px;
+}
+
+.recruiter-activity-header {
+  align-items: flex-start;
+  background: var(--bg-body);
+  border: 1px solid var(--border-lighter);
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+}
+
+.recruiter-activity-header div {
+  display: grid;
+  gap: 3px;
+}
+
+.recruiter-activity-header span {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.recruiter-activity-stats {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.recruiter-activity-stats div {
+  background: var(--bg-body);
+  border: 1px solid var(--border-lighter);
+  border-radius: 8px;
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.recruiter-activity-stats span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.recruiter-activity-stats strong,
+.recruiter-activity-stats a {
+  align-items: center;
+  color: var(--text-main);
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 650;
+  gap: 6px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.activity-loading {
+  align-items: center;
+  color: var(--text-muted);
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  padding: 24px;
+}
+
+.status-reply_received,
+.status-imported,
+.status-bounce,
+.status-accepted_by_gmail,
+.status-temporary_failure,
+.status-manual_retry,
+.status-queued,
+.status-skipped {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  border: 1px solid var(--border-light);
+  background: var(--bg-body);
+  color: var(--text-muted-darker);
+}
+
+.status-reply_received {
+  background: var(--success-bg);
+  border-color: var(--success-border);
+  color: var(--success-text);
+}
+
+.status-bounce,
+.status-temporary_failure {
+  background: var(--error-bg);
+  border-color: var(--error-border);
+  color: var(--error-text);
+}
+
+.status-imported,
+.status-accepted_by_gmail {
+  background: var(--info-bg);
+  border-color: var(--info-border);
+  color: var(--info-text);
+}
+
+@media (max-width: 900px) {
+  .activity-action-panel,
+  .recruiter-activity-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .activity-action-grid,
+  .activity-result-actions {
+    justify-content: stretch;
+  }
+
+  .activity-action-grid button,
+  .activity-result-actions button {
+    width: 100%;
+  }
+
+  .activity-search {
+    min-width: 100%;
+  }
+
+  .activity-result-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 /* ==========================================================================
    Toast Notification System
    ========================================================================== */

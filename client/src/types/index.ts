@@ -91,6 +91,42 @@ export type SentImportSummary = {
   errors: number;
 };
 
+export type EmailActivitySummary = {
+  replies: number;
+  bounces: number;
+  invalidAddresses: number;
+  importedEmails: number;
+  lastActivityAt: string | null;
+};
+
+export type EmailActivityItem = {
+  id: number;
+  eventType: string;
+  recruiterId: number | null;
+  campaignId: number | null;
+  queueId: number | null;
+  gmailMessageId: string | null;
+  gmailThreadId: string | null;
+  gmailThreadLink: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  recruiterName: string | null;
+  recruiterCompany: string | null;
+  recruiterEmail: string | null;
+};
+
+export type EmailActivityList = {
+  rows: EmailActivityItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+export type RecruiterActivityDetails = {
+  recruiter: (Recruiter & { gmailThreadLink?: string | null }) | null;
+  activities: EmailActivityItem[];
+};
+
 export type Template = {
   id: number;
   name: string;

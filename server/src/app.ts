@@ -17,6 +17,7 @@ import { uploadRoutes } from "./routes/uploadRoutes.js";
 import { coverLetterRoutes } from "./routes/coverLetterRoutes.js";
 import { emailImportRoutes } from "./routes/emailImportRoutes.js";
 import { emailMonitorRoutes } from "./routes/emailMonitorRoutes.js";
+import { emailActivityRoutes } from "./routes/emailActivityRoutes.js";
 
 fs.mkdirSync(config.uploadsDir, { recursive: true });
 fs.mkdirSync(config.logsDir, { recursive: true });
@@ -36,6 +37,7 @@ app.use("/api/uploads", uploadRoutes);
 app.use("/api/cover-letter", coverLetterRoutes);
 app.use("/api/email-monitor", emailMonitorRoutes);
 app.use("/api/email-import", emailImportRoutes);
+app.use("/api/email-activity", emailActivityRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/queue", queueRoutes);
 app.use("/api/logs", logRoutes);

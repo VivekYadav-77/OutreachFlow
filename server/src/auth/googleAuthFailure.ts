@@ -46,11 +46,15 @@ export function detectGoogleAuthFailure(error: unknown): GoogleAuthFailure {
     loweredMessage.includes("token has been revoked") ||
     loweredMessage.includes("invalid credentials") ||
     loweredMessage.includes("login required");
+  const insufficientScopeMatch =
+    loweredMessage.includes("insufficient authentication scopes") ||
+    loweredMessage.includes("insufficient permission") ||
+    loweredMessage.includes("access_token_scope_insufficient");
 
-  const isAuthFailure = authCodeMatch || authMessageMatch || status === 401;
+  const isAuthFailure = authCodeMatch || authMessageMatch || insufficientScopeMatch || status === 401;
   return {
     isAuthFailure,
-    code: loweredCode ?? (status === 401 ? "unauthorized" : undefined),
+    code: loweredCode ?? (insufficientScopeMatch ? "insufficient_scope" : status === 401 ? "unauthorized" : undefined),
     reason: message ?? (isAuthFailure ? "Google authorization is no longer valid" : undefined),
     status
   };

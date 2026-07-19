@@ -22,6 +22,7 @@ import {
   recruiterSchema,
   updateRecruiter
 } from "../services/recruiterService.js";
+import { listRecruiterActivities } from "../services/emailActivityService.js";
 import { ValidationError } from "../utils/errors.js";
 
 const upload = multer({ dest: config.uploadsDir, limits: { fileSize: 5 * 1024 * 1024 } });
@@ -81,6 +82,14 @@ recruiterRoutes.post("/import", upload.single("file"), async (req, res, next) =>
     if (req.file) {
       await fs.unlink(req.file.path).catch(() => undefined);
     }
+  }
+});
+
+recruiterRoutes.get("/:id/activity", validate("params", z.object({ id: z.coerce.number().int().positive() })), async (req, res, next) => {
+  try {
+    res.json({ ok: true, data: await listRecruiterActivities(Number(req.params.id)) });
+  } catch (error) {
+    next(error);
   }
 });
 
