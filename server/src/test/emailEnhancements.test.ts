@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseAddressList } from "../providers/gmail.provider.js";
 import { parseBounce } from "../services/bounceMonitorService.js";
-import { mapLifecycleToLegacyStatus } from "../services/emailActivityService.js";
+import { buildActivityDateRange, mapLifecycleToLegacyStatus } from "../services/emailActivityService.js";
 
 describe("email enhancement helpers", () => {
   it("maps new recruiter lifecycle statuses to legacy-compatible labels", () => {
@@ -41,5 +41,23 @@ describe("email enhancement helpers", () => {
 
     expect(permanent).toMatchObject({ recipientEmail: "bad@example.com", bounceType: "INVALID_ADDRESS", smtpCode: "5.1.1" });
     expect(temporary).toMatchObject({ recipientEmail: "slow@example.com", bounceType: "TEMPORARY_FAILURE", smtpCode: "4.2.0" });
+  });
+
+  it("builds full-day date filters when time is omitted", () => {
+    const range = buildActivityDateRange({ fromDate: "2026-07-18", toDate: "2026-07-19" });
+
+    expect(range.from).toEqual(new Date(2026, 6, 18, 0, 0, 0, 0));
+    expect(range.to).toEqual(new Date(2026, 6, 19, 23, 59, 59, 999));
+  });
+
+  it("builds exact date and time filters when time is provided", () => {
+    const range = buildActivityDateRange({ fromDate: "2026-07-18", fromTime: "09:15", toDate: "2026-07-18", toTime: "17:45" });
+
+    expect(range.from).toEqual(new Date(2026, 6, 18, 9, 15, 0, 0));
+    expect(range.to).toEqual(new Date(2026, 6, 18, 17, 45, 59, 999));
+  });
+
+  it("rejects inverted date and time filters", () => {
+    expect(() => buildActivityDateRange({ fromDate: "2026-07-19", fromTime: "10:00", toDate: "2026-07-18", toTime: "10:00" })).toThrow();
   });
 });

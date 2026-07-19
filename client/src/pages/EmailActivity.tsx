@@ -1,5 +1,5 @@
 import React from "react";
-import { AlertTriangle, ExternalLink, Inbox, MailCheck, RefreshCw, Reply, Search, X } from "lucide-react";
+import { AlertTriangle, Download, ExternalLink, Inbox, MailCheck, RefreshCw, Reply, Search, X } from "lucide-react";
 import { API_URL, api, useApi } from "../api/client";
 import { Page } from "../components/Page";
 import { Spinner } from "../components/Spinner";
@@ -9,6 +9,7 @@ import type { AuthStatus, EmailActivityItem, EmailActivityList, EmailActivitySum
 
 type ActivityFilter = "all" | "replies" | "bounces" | "imports";
 type ActivityAction = "replies" | "bounces" | "import";
+type ExportMode = "all" | "withoutBounces";
 type ActionResult =
   | { kind: "replies"; title: string; summary: MonitorSummary }
   | { kind: "bounces"; title: string; summary: MonitorSummary }
@@ -40,7 +41,7 @@ function metadataPreview(value: Record<string, unknown>) {
   return entries
     .slice(0, 3)
     .map(([key, item]) => `${key}: ${String(item)}`)
-    .join(" · ");
+    .join(" | ");
 }
 
 function ResultModal({ result, onClose, onFilter }: { result: ActionResult; onClose: () => void; onFilter: (filter: ActivityFilter) => void }) {
@@ -107,6 +108,12 @@ export function EmailActivity() {
   const [filter, setFilter] = React.useState<ActivityFilter>("all");
   const [search, setSearch] = React.useState("");
   const [page, setPage] = React.useState(1);
+  const [fromDate, setFromDate] = React.useState("");
+  const [toDate, setToDate] = React.useState("");
+  const [fromTime, setFromTime] = React.useState("");
+  const [toTime, setToTime] = React.useState("");
+  const [exportMode, setExportMode] = React.useState<ExportMode>("all");
+  const [exporting, setExporting] = React.useState(false);
   const [runningAction, setRunningAction] = React.useState<ActivityAction | null>(null);
   const [result, setResult] = React.useState<ActionResult | null>(null);
   const toast = useToast();
@@ -117,8 +124,12 @@ export function EmailActivity() {
     params.set("page", String(page));
     params.set("pageSize", "25");
     if (search) params.set("search", search);
+    if (fromDate) params.set("fromDate", fromDate);
+    if (toDate) params.set("toDate", toDate);
+    if (fromTime) params.set("fromTime", fromTime);
+    if (toTime) params.set("toTime", toTime);
     return params.toString();
-  }, [filter, page, search]);
+  }, [filter, page, search, fromDate, toDate, fromTime, toTime]);
 
   const { data: summary } = useApi<EmailActivitySummary>("/api/email-activity/summary", refresh);
   const { data: activity, loading: activityLoading } = useApi<EmailActivityList>(`/api/email-activity?${query}`, refresh);
@@ -128,7 +139,7 @@ export function EmailActivity() {
 
   React.useEffect(() => {
     setPage(1);
-  }, [filter, search]);
+  }, [filter, search, fromDate, toDate, fromTime, toTime]);
 
   const runAction = async (action: ActivityAction) => {
     setRunningAction(action);
@@ -153,6 +164,54 @@ export function EmailActivity() {
       toast.error(err instanceof Error ? err.message : "Email activity action failed");
     } finally {
       setRunningAction(null);
+    }
+  };
+
+  const clearFilters = () => {
+    setSearch("");
+    setFromDate("");
+    setToDate("");
+    setFromTime("");
+    setToTime("");
+    setPage(1);
+  };
+
+  const buildExportUrl = () => {
+    const params = new URLSearchParams();
+    params.set("type", filter);
+    params.set("exportMode", exportMode);
+    if (search) params.set("search", search);
+    if (fromDate) params.set("fromDate", fromDate);
+    if (toDate) params.set("toDate", toDate);
+    if (fromTime) params.set("fromTime", fromTime);
+    if (toTime) params.set("toTime", toTime);
+    return `${API_URL}/api/email-activity/export?${params.toString()}`;
+  };
+
+  const downloadExcel = async () => {
+    setExporting(true);
+    try {
+      const response = await fetch(buildExportUrl());
+      if (!response.ok) {
+        const json = await response.json().catch(() => null);
+        throw new Error(json?.error?.message ?? "Failed to download Excel file");
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition");
+      const filename = disposition?.match(/filename="([^"]+)"/)?.[1] ?? `email-activity-${exportMode}.xlsx`;
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("Excel download prepared.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to download Excel file");
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -223,6 +282,41 @@ export function EmailActivity() {
           <div className="activity-search">
             <Search size={14} />
             <input placeholder="Search recruiter or event..." value={search} onChange={(event) => setSearch(event.target.value)} />
+          </div>
+        </div>
+
+        <div className="activity-filter-bar">
+          <label>
+            <span>From date</span>
+            <input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
+          </label>
+          <label>
+            <span>From time</span>
+            <input type="time" value={fromTime} onChange={(event) => setFromTime(event.target.value)} disabled={!fromDate} />
+          </label>
+          <label>
+            <span>To date</span>
+            <input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} />
+          </label>
+          <label>
+            <span>To time</span>
+            <input type="time" value={toTime} onChange={(event) => setToTime(event.target.value)} disabled={!toDate} />
+          </label>
+          <label>
+            <span>Excel data</span>
+            <select value={exportMode} onChange={(event) => setExportMode(event.target.value as ExportMode)}>
+              <option value="all">All email activity</option>
+              <option value="withoutBounces">Exclude bounced recipients</option>
+            </select>
+          </label>
+          <div className="activity-filter-actions">
+            <button type="button" className="secondary" onClick={clearFilters}>
+              Clear filters
+            </button>
+            <button type="button" onClick={downloadExcel} disabled={exporting}>
+              {exporting ? <Spinner size={14} /> : <Download size={16} />}
+              Download Excel
+            </button>
           </div>
         </div>
 

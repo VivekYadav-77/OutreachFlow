@@ -1,7 +1,9 @@
-import { and, count, desc, eq, ilike, inArray, or } from "drizzle-orm";
+import * as XLSX from "xlsx";
+import { and, count, desc, eq, gte, ilike, inArray, lte, or, sql } from "drizzle-orm";
 import { db } from "../database/db.js";
 import { campaignRecipients, emailActivity, emailBounce, emailReply, gmailImportHistory, recruiters } from "../database/schema.js";
 import { createLog } from "./logService.js";
+import { ValidationError } from "../utils/errors.js";
 
 export type EmailActivityEvent =
   | "CAMPAIGN_CREATED"
@@ -44,7 +46,14 @@ type ActivityListInput = {
   pageSize?: number;
   search?: string;
   recruiterId?: number;
+  fromDate?: string;
+  toDate?: string;
+  fromTime?: string;
+  toTime?: string;
+  exportMode?: "all" | "withoutBounces";
 };
+
+type EmailActivityRow = Awaited<ReturnType<typeof selectEmailActivityRows>>[number];
 
 export function mapLifecycleToLegacyStatus(status: string) {
   switch (status) {
@@ -128,6 +137,99 @@ function activityTypeFilter(type: ActivityListInput["type"]) {
   return inArray(emailActivity.eventType, [...ACTIVITY_TYPE_FILTERS[type]]);
 }
 
+function parseDateParts(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) throw new ValidationError("Date filters must use YYYY-MM-DD format");
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]) - 1,
+    day: Number(match[3])
+  };
+}
+
+function parseTimeParts(value: string | undefined, fallback: { hour: number; minute: number; second: number; millisecond: number }) {
+  if (!value) return fallback;
+  const match = value.match(/^(\d{2}):(\d{2})$/);
+  if (!match) throw new ValidationError("Time filters must use HH:mm format");
+  return {
+    hour: Number(match[1]),
+    minute: Number(match[2]),
+    second: fallback.second,
+    millisecond: fallback.millisecond
+  };
+}
+
+export function buildActivityDateRange(input: Pick<ActivityListInput, "fromDate" | "toDate" | "fromTime" | "toTime">) {
+  const range: { from?: Date; to?: Date } = {};
+  if (input.fromDate) {
+    const date = parseDateParts(input.fromDate);
+    const time = parseTimeParts(input.fromTime, { hour: 0, minute: 0, second: 0, millisecond: 0 });
+    range.from = new Date(date.year, date.month, date.day, time.hour, time.minute, time.second, time.millisecond);
+  }
+  if (input.toDate) {
+    const date = parseDateParts(input.toDate);
+    const time = parseTimeParts(input.toTime, { hour: 23, minute: 59, second: 59, millisecond: 999 });
+    range.to = new Date(date.year, date.month, date.day, time.hour, time.minute, time.second, time.millisecond);
+  }
+  if (range.from && range.to && range.from > range.to) {
+    throw new ValidationError("From date/time cannot be after to date/time");
+  }
+  return range;
+}
+
+function buildActivityFilters(input: ActivityListInput) {
+  const filters = [];
+  const typeFilter = activityTypeFilter(input.type);
+  if (typeFilter) filters.push(typeFilter);
+  if (input.recruiterId) filters.push(eq(emailActivity.recruiterId, input.recruiterId));
+  if (input.search) {
+    const term = `%${input.search}%`;
+    filters.push(or(ilike(recruiters.fullName, term), ilike(recruiters.company, term), ilike(recruiters.email, term), ilike(emailActivity.eventType, term)));
+  }
+  const range = buildActivityDateRange(input);
+  if (range.from) filters.push(gte(emailActivity.createdAt, range.from));
+  if (range.to) filters.push(lte(emailActivity.createdAt, range.to));
+  if (input.exportMode === "withoutBounces") {
+    filters.push(sql`(${recruiters.status} is null or ${recruiters.status} <> 'INVALID_ADDRESS')`);
+    filters.push(sql`not exists (select 1 from ${emailBounce} where lower(${emailBounce.recipientEmail}) = lower(${recruiters.email}))`);
+  }
+  return filters.length ? and(...filters) : undefined;
+}
+
+async function selectEmailActivityRows(where: ReturnType<typeof buildActivityFilters>, limit?: number, offset?: number) {
+  let query = db
+    .select({
+      id: emailActivity.id,
+      eventType: emailActivity.eventType,
+      recruiterId: emailActivity.recruiterId,
+      campaignId: emailActivity.campaignId,
+      queueId: emailActivity.queueId,
+      gmailMessageId: emailActivity.gmailMessageId,
+      gmailThreadId: emailActivity.gmailThreadId,
+      metadata: emailActivity.metadata,
+      createdAt: emailActivity.createdAt,
+      recruiterName: recruiters.fullName,
+      recruiterCompany: recruiters.company,
+      recruiterEmail: recruiters.email,
+      recruiterStatus: recruiters.status
+    })
+    .from(emailActivity)
+    .leftJoin(recruiters, eq(emailActivity.recruiterId, recruiters.id))
+    .where(where)
+    .orderBy(desc(emailActivity.createdAt))
+    .$dynamic();
+  if (typeof limit === "number") query = query.limit(limit);
+  if (typeof offset === "number") query = query.offset(offset);
+  return query;
+}
+
+function withThreadLinks(rows: EmailActivityRow[]) {
+  return rows.map((row) => ({
+    ...row,
+    gmailThreadLink: row.gmailThreadId ? `https://mail.google.com/mail/u/0/#inbox/${encodeURIComponent(row.gmailThreadId)}` : null
+  }));
+}
+
 export async function getEmailActivitySummary() {
   const [{ value: replies }] = await db.select({ value: count() }).from(emailReply);
   const [{ value: bounces }] = await db.select({ value: count() }).from(emailBounce);
@@ -147,50 +249,81 @@ export async function getEmailActivitySummary() {
 export async function listEmailActivities(input: ActivityListInput = {}) {
   const page = Math.max(1, input.page ?? 1);
   const pageSize = Math.min(100, Math.max(1, input.pageSize ?? 25));
-  const filters = [];
-  const typeFilter = activityTypeFilter(input.type);
-  if (typeFilter) filters.push(typeFilter);
-  if (input.recruiterId) filters.push(eq(emailActivity.recruiterId, input.recruiterId));
-  if (input.search) {
-    const term = `%${input.search}%`;
-    filters.push(or(ilike(recruiters.fullName, term), ilike(recruiters.company, term), ilike(recruiters.email, term), ilike(emailActivity.eventType, term)));
-  }
-  const where = filters.length ? and(...filters) : undefined;
+  const where = buildActivityFilters(input);
   const [{ value: total }] = await db
     .select({ value: count() })
     .from(emailActivity)
     .leftJoin(recruiters, eq(emailActivity.recruiterId, recruiters.id))
     .where(where);
-  const rows = await db
-    .select({
-      id: emailActivity.id,
-      eventType: emailActivity.eventType,
-      recruiterId: emailActivity.recruiterId,
-      campaignId: emailActivity.campaignId,
-      queueId: emailActivity.queueId,
-      gmailMessageId: emailActivity.gmailMessageId,
-      gmailThreadId: emailActivity.gmailThreadId,
-      metadata: emailActivity.metadata,
-      createdAt: emailActivity.createdAt,
-      recruiterName: recruiters.fullName,
-      recruiterCompany: recruiters.company,
-      recruiterEmail: recruiters.email
-    })
-    .from(emailActivity)
-    .leftJoin(recruiters, eq(emailActivity.recruiterId, recruiters.id))
-    .where(where)
-    .orderBy(desc(emailActivity.createdAt))
-    .limit(pageSize)
-    .offset((page - 1) * pageSize);
+  const rows = await selectEmailActivityRows(where, pageSize, (page - 1) * pageSize);
 
   return {
-    rows: rows.map((row) => ({
-      ...row,
-      gmailThreadLink: row.gmailThreadId ? `https://mail.google.com/mail/u/0/#inbox/${encodeURIComponent(row.gmailThreadId)}` : null
-    })),
+    rows: withThreadLinks(rows),
     total,
     page,
     pageSize
+  };
+}
+
+function readMetadata(row: EmailActivityRow, key: string) {
+  const value = row.metadata?.[key];
+  return value === null || value === undefined ? "" : String(value);
+}
+
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+export async function exportEmailActivities(input: ActivityListInput = {}) {
+  const where = buildActivityFilters(input);
+  const rows = withThreadLinks(await selectEmailActivityRows(where));
+  const sheetRows = rows.map((row) => ({
+    "Event Type": row.eventType,
+    "Recruiter Name": row.recruiterName ?? "",
+    Company: row.recruiterCompany ?? "",
+    Email: row.recruiterEmail ?? "",
+    Status: row.recruiterStatus ?? "",
+    "Campaign ID": row.campaignId ?? "",
+    "Queue ID": row.queueId ?? "",
+    "Gmail Message ID": row.gmailMessageId ?? "",
+    "Gmail Thread ID": row.gmailThreadId ?? "",
+    "Gmail Thread Link": row.gmailThreadLink ?? "",
+    Subject: readMetadata(row, "subject"),
+    "Recipient Email": readMetadata(row, "recipientEmail"),
+    "Bounce Type": readMetadata(row, "bounceType"),
+    "SMTP Code": readMetadata(row, "smtpCode"),
+    "Reason / Preview": readMetadata(row, "reason") || readMetadata(row, "preview"),
+    "Activity Time": row.createdAt.toISOString(),
+    "Metadata JSON": JSON.stringify(row.metadata ?? {})
+  }));
+  const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.json_to_sheet(sheetRows);
+  worksheet["!cols"] = [
+    { wch: 22 },
+    { wch: 24 },
+    { wch: 24 },
+    { wch: 32 },
+    { wch: 18 },
+    { wch: 12 },
+    { wch: 10 },
+    { wch: 24 },
+    { wch: 24 },
+    { wch: 52 },
+    { wch: 48 },
+    { wch: 32 },
+    { wch: 18 },
+    { wch: 14 },
+    { wch: 42 },
+    { wch: 24 },
+    { wch: 60 }
+  ];
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Email Activity");
+  const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer" }) as Buffer;
+  const exportMode = input.exportMode === "withoutBounces" ? "without-bounces" : "all";
+  return {
+    buffer,
+    filename: `email-activity-${exportMode}-${todayKey()}.xlsx`,
+    count: rows.length
   };
 }
 

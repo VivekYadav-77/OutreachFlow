@@ -2315,6 +2315,44 @@ th {
   padding: 0;
 }
 
+.activity-filter-bar {
+  align-items: end;
+  background: var(--bg-body);
+  border: 1px solid var(--border-lighter);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(5, minmax(140px, 1fr)) auto;
+  margin-bottom: 14px;
+  padding: 12px;
+}
+
+.activity-filter-bar label {
+  color: var(--text-muted-darker);
+  display: grid;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 5px;
+  min-width: 0;
+  text-transform: uppercase;
+}
+
+.activity-filter-bar input,
+.activity-filter-bar select {
+  min-height: 36px;
+}
+
+.activity-filter-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.activity-filter-actions button {
+  min-height: 36px;
+  white-space: nowrap;
+}
+
 .activity-subtext,
 .activity-metadata {
   color: var(--text-muted);
@@ -2502,6 +2540,18 @@ th {
 
   .activity-search {
     min-width: 100%;
+  }
+
+  .activity-filter-bar {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .activity-filter-actions {
+    grid-column: 1 / -1;
+  }
+
+  .activity-filter-actions button {
+    flex: 1;
   }
 
   .activity-result-grid {
