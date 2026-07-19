@@ -169,11 +169,13 @@ Google Cloud is Google's platform for developers. It lets you access Google serv
 
 OAuth 2.0 is a security standard that lets you grant an application access to your Google account **without sharing your password**. Instead of giving the app your Gmail password, you click "Allow" on Google's own login screen, and Google gives the app a secure token it can use on your behalf.
 
-**Plain English:** The "Connect Google Account" button in the app's Settings page opens a Google login popup. Once you approve, Google sends back a token that lets the app send emails as you.
+**Plain English:** The "Connect Google Account" button in the app's Settings page opens a Google login popup. Once you approve, Google sends back a token that lets the app send emails as you and read message metadata needed for reply checks, bounce checks, and sent-mail import.
 
 ### Why does this project need it?
 
 Outreach Flow sends emails directly through the Gmail API using your Gmail account. This is the official, secure, supported way to send Gmail — no passwords, no browser automation, no third-party SMTP servers.
+
+The app also uses Gmail read-only access for the **Email Activity** page. Read access is used to inspect tracked threads for replies, search delivery-failure messages for bounces, and import metadata from Gmail Sent Mail. It does not delete or modify Gmail messages.
 
 The credentials you create (`GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`) identify your application to Google. The OAuth flow connects your specific Gmail account to the app and stores a refresh token in the database.
 
@@ -216,7 +218,7 @@ Before creating credentials, you must set up the "consent screen" — the page u
    - **App name:** `Outreach Flow` (or any name you like)
    - **User support email:** your email address
    - **Developer contact information:** your email address
-5. Click **"Save and Continue"** through the **Scopes** and **Test users** sections — you don't need to change anything there.
+5. Click **"Save and Continue"** through the **Scopes** and **Test users** sections — you don't need to manually add scopes here for local testing. The app requests Gmail send and Gmail read-only scopes during the OAuth connection flow.
 6. On the **Summary** screen, click **"Back to Dashboard"**.
 
 > **Note:** Your app will be in "Testing" mode. This is fine for personal use. It means only accounts you add as "Test users" can authorize the app. You can add your Gmail address under **OAuth consent screen** → **Test users** → **"+ Add users"**.
@@ -266,8 +268,10 @@ GOOGLE_REDIRECT_URI=http://localhost:4000/api/auth/callback
 5. You'll be redirected to Google's login page
 6. Select the Gmail account you want to send from
 7. If you see **"This app isn't verified"** — click **"Advanced"** → **"Go to Outreach Flow (unsafe)"**. This is normal for personal projects.
-8. Click **"Allow"** to grant the Gmail send permission
+8. Click **"Allow"** to grant Gmail send and read-only permissions
 9. You'll be redirected back to Settings, and it should now show **"Connected"** with your email address
+
+> **Existing users:** If you connected Google before the Email Activity features were added, reconnect Google once. The old token only had send access, so reply checks, bounce checks, and sent-mail import will show a reconnect/read-access message until the new scope is granted.
 
 ### Common mistakes
 
@@ -279,6 +283,7 @@ GOOGLE_REDIRECT_URI=http://localhost:4000/api/auth/callback
 | Test user not added | `Access blocked: Outreach Flow has not completed the Google verification process` | Add your Gmail to the Test users list in OAuth consent screen settings |
 | Credentials copied incorrectly | `invalid_client` error | Re-copy Client ID and Secret from Google Console — no extra spaces |
 | Not restarting the server | Old config loaded | Always restart the backend (`Ctrl+C` then `npm run dev`) after changing `server/.env` |
+| Gmail read access missing | Email Activity actions say reconnect/read access is required | Reconnect Google from the app so the OAuth token includes Gmail read-only access |
 
 ### Verifying it works
 
@@ -287,6 +292,8 @@ After connecting, the **Settings** page should show:
 Google Account: Connected ✓
 Email: yourname@gmail.com
 ```
+
+The **Email Activity** page should allow **Check Replies**, **Check Bounces**, and **Import Sent Emails** when Gmail read access is present. If those actions are disabled, reconnect Google.
 
 You can also check the connection status via the API:
 ```

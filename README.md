@@ -47,13 +47,14 @@ Think of it as a lightweight, privacy-first alternative to tools like Mailchimp 
 
 ## 2. Features
 
-- **Recruiter/Contact Management** — Add, edit, and organize contacts manually or by importing a CSV or Excel file. Track outreach status per contact (`Pending`, `Sent`, `Replied`, `Failed`, `Skipped`).
+- **Recruiter/Contact Management** — Add, edit, and organize contacts manually or by importing a CSV or Excel file. The Recruiters page is a pre-send contact pool; Gmail sent-history imports and successfully sent worker recipients are kept in activity/history views instead.
 - **Rich-Text Email Composer** — Write emails with a full WYSIWYG editor (bold, italic, links, images, headings, lists). Supports CC, BCC, and file attachments.
 - **Email Templates** — Create reusable email templates with Handlebars-style placeholders (`{{fullName}}`, `{{company}}`, `{{designation}}`) that get personalized for each recipient automatically.
 - **Campaign Management** — Group contacts into campaigns with custom sending windows, daily limits, and retry logic.
 - **Automated Send Queue** — Queue emails for background delivery. A built-in worker picks up jobs, respects your configured working hours and daily send limits, and retries on transient failures.
 - **AI Cover Letter Generator** — Upload your resume (PDF) and let Google Gemini AI generate a personalized cover letter email. Supports custom tone, target role, company, job description, and skill focus.
 - **Statistics Dashboard** — Visual charts showing daily sent/failed email counts over time.
+- **Email Activity Workspace** — Check Gmail replies, detect delivery bounces, import sent-email metadata, filter activity by date/time/type/search, and download structured Excel reports.
 - **Application Logs** — Filterable log viewer showing every send event, error, and system action.
 - **Settings Panel** — Control the worker (start/pause/stop), configure daily limits, sending delays, working hours, and retry intervals. Connect/disconnect your Google account from here.
 - **Dark/Light Theme** — Full theme switcher with preference persistence.
@@ -126,7 +127,7 @@ Think of it as a lightweight, privacy-first alternative to tools like Mailchimp 
 | `multer` | — | File upload handling |
 | `pdf-parse` | — | PDF text extraction |
 | `@fast-csv` | — | CSV import/export |
-| `xlsx` | — | Excel recruiter import |
+| `xlsx` | — | Excel recruiter import and Email Activity export |
 | `pino` | — | Structured logging |
 | `node-cron` | — | Background job scheduler |
 | `zod` | — | Environment variable validation |
@@ -479,8 +480,18 @@ Manage your contacts here. You can:
 - Add contacts one by one with a form
 - Import a CSV or Excel file with common headers like `Name`, `Title`, `Company`, and `Email`
 - Export your contacts to CSV
-- View per-contact send status
-- Filter by status (`Pending`, `Sent`, `Replied`, etc.)
+- View and filter the pre-send contact pool by status
+
+The Recruiters page intentionally does not show Gmail monitoring history. It hides contacts imported from Gmail sent history and contacts that were already successfully sent by the email worker. Failed or pending contacts remain visible so you can review, edit, retry, or fix them.
+
+### Email Activity
+
+Use this page for Gmail monitoring and history. You can:
+- Manually check replies on tracked Gmail threads
+- Manually check bounces from Gmail inbox delivery failure messages
+- Import sent-email metadata from Gmail Sent Mail without creating queue jobs or resending emails
+- Filter activity by type, search, date range, and optional time range
+- Download a structured Excel report for all matching activity or matching activity excluding bounced recipients
 
 ### Compose
 
@@ -550,6 +561,8 @@ For a complete beginner-friendly walkthrough with screenshots, see:
 6. Copy the **Client ID** and **Client Secret** to `server/.env`
 7. Restart the backend
 8. Go to **Settings** in the app → click **Connect Google Account**
+
+The app requests Gmail send access for sending and Gmail read-only access for reply checks, bounce checks, and sent-mail import. Existing users may need to reconnect Google once after upgrading so the new read permission is granted.
 
 ---
 
@@ -630,6 +643,14 @@ psql -U postgres -c "CREATE DATABASE email_sender;"
 - Queue is empty
 
 **Fix:** Check the **Logs** page for specific error messages. Check the **Dashboard** for worker status and today's send count.
+
+---
+
+### ❌ Gmail monitoring says read access is required
+
+**Cause:** Your Google account was connected before reply checks, bounce checks, and sent-mail import were added, so the stored OAuth token only has send permission.
+
+**Fix:** Reconnect Google from the app. This refreshes the OAuth grant with Gmail read-only access.
 
 ---
 
@@ -733,7 +754,7 @@ A: Yes — OAuth 2.0 does not use your password at all. 2FA does not affect the 
 ## 18. Security Notes
 
 - **Data is local:** All data (contacts, emails, credentials, logs) is stored only on your machine in the local PostgreSQL database. Nothing is sent to any third-party service except Google's own APIs.
-- **OAuth scopes:** The app requests only the minimum required Gmail scope: `gmail.send` (send email on your behalf) and `userinfo.email` (display your email address in Settings). It cannot read, delete, or modify your emails.
+- **OAuth scopes:** The app requests Gmail send access to send messages, Gmail read-only access to check replies/bounces and import sent-email metadata, and `userinfo.email` to display your connected account. It does not delete or modify Gmail messages.
 - **Never commit `server/.env`:** Your `server/.env` file contains sensitive credentials (Google Client Secret, Gemini API Key). This file is listed in `.gitignore`. Never share it or commit it to version control.
 - **Local network only:** In development mode, the backend binds to `localhost:4000` and only accepts requests from the configured `CLIENT_URL`. Do not expose port 4000 directly to the internet without adding authentication.
 - **Rate limits:** The Gmail API has sending quotas. The app's daily limit and delay settings help stay within acceptable usage. Do not set a daily limit above 500 emails per day on a personal Gmail account.
