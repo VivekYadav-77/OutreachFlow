@@ -1,6 +1,6 @@
 import { format } from "@fast-csv/format";
 import { parseString } from "@fast-csv/parse";
-import { and, asc, count, desc, eq, ilike, or, inArray, ne } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, or, inArray, ne, sql, type SQL } from "drizzle-orm";
 import * as XLSX from "xlsx";
 import { z } from "zod";
 import { db } from "../database/db.js";
@@ -57,6 +57,30 @@ function uniqueIds(ids: number[]) {
   return Array.from(new Set(ids));
 }
 
+const HIDDEN_RECRUITER_STATUSES = ["Sent", "ACCEPTED_BY_GMAIL", "COMPLETED"] as const;
+
+export function isRecruiterVisibleInContactPool(row: {
+  importedFromGmail?: boolean | null;
+  status?: string | null;
+  hasSentQueueJob?: boolean;
+  hasQueueSentAt?: boolean;
+}) {
+  return !row.importedFromGmail && !HIDDEN_RECRUITER_STATUSES.includes(row.status as never) && !row.hasSentQueueJob && !row.hasQueueSentAt;
+}
+
+function contactPoolVisibilityFilters(): SQL[] {
+  return [
+    eq(recruiters.importedFromGmail, false),
+    sql`${recruiters.status} not in ('Sent', 'ACCEPTED_BY_GMAIL', 'COMPLETED')`,
+    sql`not exists (
+      select 1
+      from ${emailQueue}
+      where ${emailQueue.recruiterId} = ${recruiters.id}
+        and (${emailQueue.state} = 'Sent' or ${emailQueue.sentAt} is not null)
+    )`
+  ];
+}
+
 async function getSendingRecruiterIds(ids: number[]) {
   if (ids.length === 0) return new Set<number>();
 
@@ -74,13 +98,14 @@ async function getSendingRecruiterIds(ids: number[]) {
 
 export async function listRecruiters(query: z.infer<typeof recruiterQuerySchema>) {
   const parsed = recruiterQuerySchema.parse(query);
-  const filters = [];
+  const filters: SQL[] = [...contactPoolVisibilityFilters()];
   if (parsed.status) filters.push(eq(recruiters.status, parsed.status));
   if (parsed.search) {
     const term = `%${parsed.search}%`;
-    filters.push(or(ilike(recruiters.fullName, term), ilike(recruiters.company, term), ilike(recruiters.email, term), ilike(recruiters.designation, term)));
+    const searchFilter = or(ilike(recruiters.fullName, term), ilike(recruiters.company, term), ilike(recruiters.email, term), ilike(recruiters.designation, term));
+    if (searchFilter) filters.push(searchFilter);
   }
-  const where = filters.length ? and(...filters) : undefined;
+  const where = and(...filters);
   const [{ value: total }] = await db.select({ value: count() }).from(recruiters).where(where);
   const rows = await db
     .select()
@@ -522,7 +547,7 @@ export async function importRecruitersFromCsv(csv: string) {
 }
 
 export async function exportRecruitersCsv() {
-  const rows = await db.select().from(recruiters).orderBy(asc(recruiters.createdAt));
+  const rows = await db.select().from(recruiters).where(and(...contactPoolVisibilityFilters())).orderBy(asc(recruiters.createdAt));
   return new Promise<string>((resolve, reject) => {
     let csv = "";
     const stream = format({ headers: true });

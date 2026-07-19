@@ -64,8 +64,12 @@ const SETTING_METADATA: Record<string, {
     description: "The hour at which email campaign activity should begin each day.",
     presets: ["08:00", "09:00", "10:00"],
     inputType: "time",
-    validate: (val) => {
+    validate: (val, form) => {
       if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(val)) return "Invalid time format (HH:MM)";
+      const endTime = String(form.endTime ?? "");
+      if (/^([01]\d|2[0-3]):[0-5]\d$/.test(endTime) && timeToMinutes(val) >= timeToMinutes(endTime)) {
+        return `Start time must be before End time (${endTime})`;
+      }
       return null;
     },
     warning: "Configuring a custom start time. Sending outside of regular business hours (especially overnight) significantly increases spam scoring."
@@ -75,8 +79,12 @@ const SETTING_METADATA: Record<string, {
     description: "The hour at which email campaign activity should pause each day.",
     presets: ["17:00", "18:00", "19:00"],
     inputType: "time",
-    validate: (val) => {
+    validate: (val, form) => {
       if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(val)) return "Invalid time format (HH:MM)";
+      const startTime = String(form.startTime ?? "");
+      if (/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime) && timeToMinutes(startTime) >= timeToMinutes(val)) {
+        return `End time must be after Start time (${startTime})`;
+      }
       return null;
     },
     warning: "Configuring a custom end time. Late-night sending is flagged by anti-abuse policies and lowers engagement."
@@ -112,6 +120,11 @@ const AUTH_STATUS_LABELS: Record<AuthStatus["status"], string> = {
   DISCONNECTED: "Disconnected",
   ERROR: "Error"
 };
+
+function timeToMinutes(value: string) {
+  const [hours, minutes] = value.split(":").map(Number);
+  return hours * 60 + minutes;
+}
 
 function formatDateTime(value?: string | null) {
   if (!value) return "Not available";
@@ -413,6 +426,12 @@ export function SettingsPage() {
     const maxDelay = Number(form.maxDelaySeconds);
     if (minDelay > maxDelay) {
       toast.error("Validation Error: Minimum delay cannot exceed maximum delay.");
+      return;
+    }
+    const startTime = String(form.startTime ?? "");
+    const endTime = String(form.endTime ?? "");
+    if (timeToMinutes(startTime) >= timeToMinutes(endTime)) {
+      toast.error("Validation Error: Send start time must be before send end time.");
       return;
     }
 

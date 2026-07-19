@@ -2460,70 +2460,6 @@ th {
   padding: 6px 10px;
 }
 
-.recruiter-activity-modal {
-  max-width: 820px;
-}
-
-.recruiter-activity-body {
-  gap: 18px;
-}
-
-.recruiter-activity-header {
-  align-items: flex-start;
-  background: var(--bg-body);
-  border: 1px solid var(--border-lighter);
-  border-radius: 8px;
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px;
-}
-
-.recruiter-activity-header div {
-  display: grid;
-  gap: 3px;
-}
-
-.recruiter-activity-header span {
-  color: var(--text-muted);
-  font-size: 13px;
-}
-
-.recruiter-activity-stats {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.recruiter-activity-stats div {
-  background: var(--bg-body);
-  border: 1px solid var(--border-lighter);
-  border-radius: 8px;
-  display: grid;
-  gap: 5px;
-  min-width: 0;
-  padding: 12px;
-}
-
-.recruiter-activity-stats span {
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-
-.recruiter-activity-stats strong,
-.recruiter-activity-stats a {
-  align-items: center;
-  color: var(--text-main);
-  display: inline-flex;
-  font-size: 13px;
-  font-weight: 650;
-  gap: 6px;
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
 .activity-loading {
   align-items: center;
   color: var(--text-muted);
@@ -2576,8 +2512,7 @@ th {
 }
 
 @media (max-width: 900px) {
-  .activity-action-panel,
-  .recruiter-activity-stats {
+  .activity-action-panel {
     grid-template-columns: 1fr;
   }
 

@@ -47,7 +47,7 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("../database/db.js", () => ({ db: mocks.db }));
 
-const { importRecruitersFromCsv, importRecruitersFromExcel, importRecruitersFromRows } = await import("../services/recruiterService.js");
+const { importRecruitersFromCsv, importRecruitersFromExcel, importRecruitersFromRows, isRecruiterVisibleInContactPool } = await import("../services/recruiterService.js");
 
 function workbookBuffer(rows: unknown[][]) {
   const workbook = XLSX.utils.book_new();
@@ -171,5 +171,31 @@ describe("recruiter file imports", () => {
     expect(result.invalid).toBe(1);
     expect(result.errors).toEqual([{ row: 3, reason: "Invalid email address" }]);
     expect(mocks.insertedRecruiters).toHaveLength(1);
+  });
+});
+
+describe("recruiter contact pool visibility", () => {
+  it("keeps manually added and CSV or Excel imported recruiters visible before successful worker execution", () => {
+    expect(isRecruiterVisibleInContactPool({ importedFromGmail: false, status: "Pending" })).toBe(true);
+    expect(isRecruiterVisibleInContactPool({ importedFromGmail: false, status: "NEW" })).toBe(true);
+    expect(isRecruiterVisibleInContactPool({ importedFromGmail: false, status: "QUEUED" })).toBe(true);
+  });
+
+  it("hides Gmail sent-history imports from the Recruiters contact pool", () => {
+    expect(isRecruiterVisibleInContactPool({ importedFromGmail: true, status: "Pending" })).toBe(false);
+  });
+
+  it("hides recruiters successfully executed by the email worker", () => {
+    expect(isRecruiterVisibleInContactPool({ importedFromGmail: false, status: "Sent" })).toBe(false);
+    expect(isRecruiterVisibleInContactPool({ importedFromGmail: false, status: "ACCEPTED_BY_GMAIL" })).toBe(false);
+    expect(isRecruiterVisibleInContactPool({ importedFromGmail: false, status: "COMPLETED" })).toBe(false);
+    expect(isRecruiterVisibleInContactPool({ importedFromGmail: false, status: "Pending", hasSentQueueJob: true })).toBe(false);
+    expect(isRecruiterVisibleInContactPool({ importedFromGmail: false, status: "Pending", hasQueueSentAt: true })).toBe(false);
+  });
+
+  it("keeps failed recruiters visible so they can be reviewed or fixed", () => {
+    expect(isRecruiterVisibleInContactPool({ importedFromGmail: false, status: "Failed" })).toBe(true);
+    expect(isRecruiterVisibleInContactPool({ importedFromGmail: false, status: "TEMPORARY_FAILURE" })).toBe(true);
+    expect(isRecruiterVisibleInContactPool({ importedFromGmail: false, status: "INVALID_ADDRESS" })).toBe(true);
   });
 });

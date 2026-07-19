@@ -6,7 +6,7 @@ import { emailService } from "../services/emailService.js";
 import { createLog } from "../services/logService.js";
 import { getSettings, setWorkerStatus } from "../services/settingsService.js";
 import { getGoogleConnectionStatus, pauseSendingForAuthFailure } from "../services/oauthConnectionService.js";
-import { markJobFailed, markJobSent, pickNextJob, scheduleRetry } from "../queue/queueService.js";
+import { getRandomDelaySeconds, markJobFailed, markJobSent, pickNextJob, scheduleRetry } from "../queue/queueService.js";
 import { AuthRequiredError } from "../utils/errors.js";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -146,7 +146,7 @@ class EmailWorker {
         }
       }
 
-      const delaySeconds = Math.floor(Math.random() * (settings.maxDelaySeconds - settings.minDelaySeconds + 1)) + settings.minDelaySeconds;
+      const delaySeconds = getRandomDelaySeconds(settings);
       await sleep(delaySeconds * 1000);
     }
   }

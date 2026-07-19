@@ -122,11 +122,6 @@ export type EmailActivityList = {
   pageSize: number;
 };
 
-export type RecruiterActivityDetails = {
-  recruiter: (Recruiter & { gmailThreadLink?: string | null }) | null;
-  activities: EmailActivityItem[];
-};
-
 export type Template = {
   id: number;
   name: string;

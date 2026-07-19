@@ -2,6 +2,7 @@ import { and, asc, count, eq, inArray, lte, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "../database/db.js";
 import { campaignRecipients, emailDrafts, emailQueue, recruiters, emailDraftAttachments } from "../database/schema.js";
+import type { AppSettings } from "../database/schema.js";
 import { QueueError, ValidationError } from "../utils/errors.js";
 import { createLog } from "../services/logService.js";
 import { getRecruiterIsInvalidAddress, recordEmailActivity } from "../services/emailActivityService.js";
@@ -14,6 +15,42 @@ export const retryFailedJobsSchema = z.object({
 });
 
 export type RetryFailedJobsInput = z.infer<typeof retryFailedJobsSchema>;
+
+type DelaySettings = Pick<AppSettings, "minDelaySeconds" | "maxDelaySeconds">;
+
+export function getRandomDelaySeconds(settings: DelaySettings) {
+  return Math.floor(Math.random() * (settings.maxDelaySeconds - settings.minDelaySeconds + 1)) + settings.minDelaySeconds;
+}
+
+export async function schedulePendingJobsFromNow(reason = "queue.schedule_pending") {
+  const settings = await getSettings();
+  const pendingJobs = await db
+    .select({ id: emailQueue.id })
+    .from(emailQueue)
+    .where(eq(emailQueue.state, "Pending"))
+    .orderBy(asc(emailQueue.createdAt));
+
+  let nextSendAt = new Date();
+  let firstSendAt: Date | null = null;
+  for (const job of pendingJobs) {
+    nextSendAt = new Date(nextSendAt.getTime() + getRandomDelaySeconds(settings) * 1000);
+    firstSendAt ??= nextSendAt;
+    await db
+      .update(emailQueue)
+      .set({ nextAttemptAt: nextSendAt, updatedAt: new Date() })
+      .where(eq(emailQueue.id, job.id));
+  }
+
+  if (pendingJobs.length > 0) {
+    await createLog({
+      event: reason,
+      message: `${pendingJobs.length} pending queue job(s) scheduled with sending delays`,
+      metadata: { count: pendingJobs.length, firstSendAt, lastSendAt: nextSendAt }
+    });
+  }
+
+  return { scheduled: pendingJobs.length };
+}
 
 export async function enqueuePendingRecruiters() {
   const settings = await getSettings();
@@ -124,19 +161,23 @@ export async function getRetryableFailedJobs() {
 
 export async function pickNextJob() {
   const now = new Date();
+  const dueJobFilter = or(
+    and(eq(emailQueue.state, "Pending"), or(sql`${emailQueue.nextAttemptAt} is null`, lte(emailQueue.nextAttemptAt, now))),
+    and(eq(emailQueue.state, "Retrying"), or(sql`${emailQueue.nextAttemptAt} is null`, lte(emailQueue.nextAttemptAt, now)))
+  );
   const [job] = await db
     .select()
     .from(emailQueue)
-    .where(
-      or(
-        eq(emailQueue.state, "Pending"),
-        and(eq(emailQueue.state, "Retrying"), or(sql`${emailQueue.nextAttemptAt} is null`, lte(emailQueue.nextAttemptAt, now)))
-      )
-    )
+    .where(dueJobFilter)
     .orderBy(asc(emailQueue.createdAt))
     .limit(1);
   if (!job) return undefined;
-  const [updated] = await db.update(emailQueue).set({ state: "Sending", updatedAt: new Date() }).where(eq(emailQueue.id, job.id)).returning();
+  const [updated] = await db
+    .update(emailQueue)
+    .set({ state: "Sending", updatedAt: new Date() })
+    .where(and(eq(emailQueue.id, job.id), dueJobFilter))
+    .returning();
+  if (!updated) return pickNextJob();
   if (updated.recruiterId && await getRecruiterIsInvalidAddress(updated.recruiterId)) {
     await markJobFailed(updated.id, "Recruiter address is permanently invalid", "Permanent");
     return pickNextJob();
@@ -221,6 +262,7 @@ export async function pauseQueue() {
 export async function resumeQueue() {
   await setWorkerStatus("running");
   await db.update(emailQueue).set({ state: "Pending", updatedAt: new Date() }).where(eq(emailQueue.state, "Paused"));
+  await schedulePendingJobsFromNow("worker.rescheduled_on_resume");
   await createLog({ event: "worker.resumed", message: "Worker resumed" });
 }
 

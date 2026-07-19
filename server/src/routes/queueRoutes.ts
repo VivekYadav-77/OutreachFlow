@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { emailWorker } from "../workers/emailWorker.js";
-import { enqueuePendingRecruiters, getQueueSummary, getRetryableFailedJobs, pauseQueue, resumeQueue, retryFailedJobs, retryFailedJobsSchema, stopQueue } from "../queue/queueService.js";
+import { enqueuePendingRecruiters, getQueueSummary, getRetryableFailedJobs, pauseQueue, resumeQueue, retryFailedJobs, retryFailedJobsSchema, schedulePendingJobsFromNow, stopQueue } from "../queue/queueService.js";
 import { getGoogleConnectionStatus } from "../services/oauthConnectionService.js";
 import { AuthRequiredError } from "../utils/errors.js";
 import { validate } from "../middleware/validate.js";
@@ -28,8 +28,9 @@ queueRoutes.post("/start", async (_req, res, next) => {
     const auth = await getGoogleConnectionStatus();
     if (auth.status !== "CONNECTED") throw new AuthRequiredError();
     const enqueued = await enqueuePendingRecruiters();
+    const scheduled = await schedulePendingJobsFromNow("worker.rescheduled_on_start");
     await emailWorker.start();
-    res.json({ ok: true, data: { ...enqueued, worker: "running" } });
+    res.json({ ok: true, data: { ...enqueued, ...scheduled, worker: "running" } });
   } catch (error) {
     next(error);
   }
