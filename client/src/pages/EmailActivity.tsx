@@ -103,6 +103,63 @@ function ResultModal({ result, onClose, onFilter }: { result: ActionResult; onCl
   );
 }
 
+function ExportDialog({
+  exportMode,
+  exporting,
+  filterSummary,
+  onClose,
+  onDownload,
+  onExportModeChange
+}: {
+  exportMode: ExportMode;
+  exporting: boolean;
+  filterSummary: string[];
+  onClose: () => void;
+  onDownload: () => void;
+  onExportModeChange: (mode: ExportMode) => void;
+}) {
+  return (
+    <div className="modal-overlay" onClick={() => !exporting && onClose()}>
+      <div className="modal-content activity-export-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="modal-header">
+          <h2>Download Email Activity</h2>
+          <button className="modal-close" onClick={onClose} disabled={exporting} aria-label="Close export dialog">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="modal-body activity-export-body">
+          <label className="activity-export-mode">
+            <span>Export mode</span>
+            <select value={exportMode} onChange={(event) => onExportModeChange(event.target.value as ExportMode)} disabled={exporting}>
+              <option value="all">All email activity</option>
+              <option value="withoutBounces">Exclude bounced recipients</option>
+            </select>
+          </label>
+
+          <div className="activity-export-summary">
+            <span>Current filters</span>
+            <div>
+              {filterSummary.map((item) => (
+                <strong key={item}>{item}</strong>
+              ))}
+            </div>
+          </div>
+
+          <div className="activity-result-actions">
+            <button type="button" className="secondary" onClick={onClose} disabled={exporting}>
+              Cancel
+            </button>
+            <button type="button" onClick={onDownload} disabled={exporting}>
+              {exporting ? <Spinner size={14} /> : <Download size={16} />}
+              Download Excel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function EmailActivity() {
   const [refresh, setRefresh] = React.useState(0);
   const [filter, setFilter] = React.useState<ActivityFilter>("all");
@@ -113,6 +170,7 @@ export function EmailActivity() {
   const [fromTime, setFromTime] = React.useState("");
   const [toTime, setToTime] = React.useState("");
   const [exportMode, setExportMode] = React.useState<ExportMode>("all");
+  const [exportDialogOpen, setExportDialogOpen] = React.useState(false);
   const [exporting, setExporting] = React.useState(false);
   const [runningAction, setRunningAction] = React.useState<ActivityAction | null>(null);
   const [result, setResult] = React.useState<ActionResult | null>(null);
@@ -136,6 +194,14 @@ export function EmailActivity() {
   const { data: authStatus } = useApi<AuthStatus>("/api/auth/status", refresh);
   const gmailReadReady = authStatus?.connected && authStatus.readScopeGranted !== false;
   const totalPages = Math.max(1, Math.ceil((activity?.total ?? 0) / (activity?.pageSize ?? 25)));
+  const filterSummary = React.useMemo(() => {
+    const selectedFilter = FILTERS.find((item) => item.value === filter)?.label ?? "All";
+    const summary = [`Type: ${selectedFilter}`];
+    if (search) summary.push(`Search: ${search}`);
+    if (fromDate) summary.push(`From: ${fromDate}${fromTime ? ` ${fromTime}` : ""}`);
+    if (toDate) summary.push(`To: ${toDate}${toTime ? ` ${toTime}` : ""}`);
+    return summary;
+  }, [filter, search, fromDate, fromTime, toDate, toTime]);
 
   React.useEffect(() => {
     setPage(1);
@@ -176,10 +242,10 @@ export function EmailActivity() {
     setPage(1);
   };
 
-  const buildExportUrl = () => {
+  const buildExportUrl = (mode: ExportMode) => {
     const params = new URLSearchParams();
     params.set("type", filter);
-    params.set("exportMode", exportMode);
+    params.set("exportMode", mode);
     if (search) params.set("search", search);
     if (fromDate) params.set("fromDate", fromDate);
     if (toDate) params.set("toDate", toDate);
@@ -191,7 +257,7 @@ export function EmailActivity() {
   const downloadExcel = async () => {
     setExporting(true);
     try {
-      const response = await fetch(buildExportUrl());
+      const response = await fetch(buildExportUrl(exportMode));
       if (!response.ok) {
         const json = await response.json().catch(() => null);
         throw new Error(json?.error?.message ?? "Failed to download Excel file");
@@ -208,6 +274,7 @@ export function EmailActivity() {
       link.remove();
       window.URL.revokeObjectURL(url);
       toast.success("Excel download prepared.");
+      setExportDialogOpen(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to download Excel file");
     } finally {
@@ -302,19 +369,12 @@ export function EmailActivity() {
             <span>To time</span>
             <input type="time" value={toTime} onChange={(event) => setToTime(event.target.value)} disabled={!toDate} />
           </label>
-          <label>
-            <span>Excel data</span>
-            <select value={exportMode} onChange={(event) => setExportMode(event.target.value as ExportMode)}>
-              <option value="all">All email activity</option>
-              <option value="withoutBounces">Exclude bounced recipients</option>
-            </select>
-          </label>
           <div className="activity-filter-actions">
             <button type="button" className="secondary" onClick={clearFilters}>
               Clear filters
             </button>
-            <button type="button" onClick={downloadExcel} disabled={exporting}>
-              {exporting ? <Spinner size={14} /> : <Download size={16} />}
+            <button type="button" onClick={() => setExportDialogOpen(true)} disabled={exporting}>
+              <Download size={16} />
               Download Excel
             </button>
           </div>
@@ -377,6 +437,16 @@ export function EmailActivity() {
       </section>
 
       {result && <ResultModal result={result} onClose={() => setResult(null)} onFilter={setFilter} />}
+      {exportDialogOpen && (
+        <ExportDialog
+          exportMode={exportMode}
+          exporting={exporting}
+          filterSummary={filterSummary}
+          onClose={() => setExportDialogOpen(false)}
+          onDownload={downloadExcel}
+          onExportModeChange={setExportMode}
+        />
+      )}
     </Page>
   );
 }

@@ -211,7 +211,20 @@ async function selectEmailActivityRows(where: ReturnType<typeof buildActivityFil
       recruiterName: recruiters.fullName,
       recruiterCompany: recruiters.company,
       recruiterEmail: recruiters.email,
-      recruiterStatus: recruiters.status
+      recruiterStatus: recruiters.status,
+      bounceType: sql<string | null>`(
+        select ${emailBounce.bounceType}
+        from ${emailBounce}
+        where ${emailBounce.gmailMessageId} = ${emailActivity.gmailMessageId}
+          or lower(${emailBounce.recipientEmail}) = lower(${recruiters.email})
+        order by ${emailBounce.createdAt} desc
+        limit 1
+      )`,
+      hasReply: sql<boolean>`exists (
+        select 1
+        from ${emailReply}
+        where ${emailReply.recruiterId} = ${emailActivity.recruiterId}
+      )`
     })
     .from(emailActivity)
     .leftJoin(recruiters, eq(emailActivity.recruiterId, recruiters.id))
@@ -274,28 +287,45 @@ function todayKey() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function padTimePart(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+export function formatActivityExportTimestamp(value: Date) {
+  return {
+    date: `${value.getFullYear()}-${padTimePart(value.getMonth() + 1)}-${padTimePart(value.getDate())}`,
+    time: `${padTimePart(value.getHours())}:${padTimePart(value.getMinutes())}`
+  };
+}
+
+export function resolveActivityExportBounceType(row: Pick<EmailActivityRow, "eventType" | "metadata" | "bounceType" | "recruiterStatus">) {
+  const metadataValue = row.metadata?.bounceType;
+  if (metadataValue) return String(metadataValue);
+  if (row.bounceType) return row.bounceType;
+  if (row.eventType === "BOUNCE" && (row.recruiterStatus === "INVALID_ADDRESS" || row.recruiterStatus === "TEMPORARY_FAILURE")) {
+    return row.recruiterStatus;
+  }
+  return "";
+}
+
 export async function exportEmailActivities(input: ActivityListInput = {}) {
   const where = buildActivityFilters(input);
   const rows = withThreadLinks(await selectEmailActivityRows(where));
-  const sheetRows = rows.map((row) => ({
-    "Event Type": row.eventType,
-    "Recruiter Name": row.recruiterName ?? "",
-    Company: row.recruiterCompany ?? "",
-    Email: row.recruiterEmail ?? "",
-    Status: row.recruiterStatus ?? "",
-    "Campaign ID": row.campaignId ?? "",
-    "Queue ID": row.queueId ?? "",
-    "Gmail Message ID": row.gmailMessageId ?? "",
-    "Gmail Thread ID": row.gmailThreadId ?? "",
-    "Gmail Thread Link": row.gmailThreadLink ?? "",
-    Subject: readMetadata(row, "subject"),
-    "Recipient Email": readMetadata(row, "recipientEmail"),
-    "Bounce Type": readMetadata(row, "bounceType"),
-    "SMTP Code": readMetadata(row, "smtpCode"),
-    "Reason / Preview": readMetadata(row, "reason") || readMetadata(row, "preview"),
-    "Activity Time": row.createdAt.toISOString(),
-    "Metadata JSON": JSON.stringify(row.metadata ?? {})
-  }));
+  const sheetRows = rows.map((row) => {
+    const timestamp = formatActivityExportTimestamp(row.createdAt);
+    return {
+      "Event Type": row.eventType,
+      "Recruiter Name": row.recruiterName ?? "",
+      Company: row.recruiterCompany ?? "",
+      Email: row.recruiterEmail ?? "",
+      Status: row.recruiterStatus ?? "",
+      Subject: readMetadata(row, "subject"),
+      "Bounce Type": resolveActivityExportBounceType(row),
+      Date: timestamp.date,
+      Time: timestamp.time,
+      Replies: row.hasReply ? "Yes" : "No"
+    };
+  });
   const workbook = XLSX.utils.book_new();
   const worksheet = XLSX.utils.json_to_sheet(sheetRows);
   worksheet["!cols"] = [
@@ -304,18 +334,11 @@ export async function exportEmailActivities(input: ActivityListInput = {}) {
     { wch: 24 },
     { wch: 32 },
     { wch: 18 },
-    { wch: 12 },
-    { wch: 10 },
-    { wch: 24 },
-    { wch: 24 },
-    { wch: 52 },
     { wch: 48 },
-    { wch: 32 },
     { wch: 18 },
     { wch: 14 },
-    { wch: 42 },
-    { wch: 24 },
-    { wch: 60 }
+    { wch: 12 },
+    { wch: 10 }
   ];
   XLSX.utils.book_append_sheet(workbook, worksheet, "Email Activity");
   const buffer = XLSX.write(workbook, { bookType: "xlsx", type: "buffer" }) as Buffer;

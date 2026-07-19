@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { parseAddressList } from "../providers/gmail.provider.js";
 import { parseBounce } from "../services/bounceMonitorService.js";
-import { buildActivityDateRange, mapLifecycleToLegacyStatus } from "../services/emailActivityService.js";
+import {
+  buildActivityDateRange,
+  formatActivityExportTimestamp,
+  mapLifecycleToLegacyStatus,
+  resolveActivityExportBounceType
+} from "../services/emailActivityService.js";
 
 describe("email enhancement helpers", () => {
   it("maps new recruiter lifecycle statuses to legacy-compatible labels", () => {
@@ -59,5 +64,39 @@ describe("email enhancement helpers", () => {
 
   it("rejects inverted date and time filters", () => {
     expect(() => buildActivityDateRange({ fromDate: "2026-07-19", fromTime: "10:00", toDate: "2026-07-18", toTime: "10:00" })).toThrow();
+  });
+
+  it("formats export timestamps into separate date and time fields", () => {
+    expect(formatActivityExportTimestamp(new Date(2026, 6, 19, 9, 5, 30))).toEqual({
+      date: "2026-07-19",
+      time: "09:05"
+    });
+  });
+
+  it("resolves export bounce type from metadata, bounce records, or bounce status", () => {
+    expect(
+      resolveActivityExportBounceType({
+        eventType: "BOUNCE",
+        metadata: { bounceType: "INVALID_ADDRESS" },
+        bounceType: null,
+        recruiterStatus: "Failed"
+      })
+    ).toBe("INVALID_ADDRESS");
+    expect(
+      resolveActivityExportBounceType({
+        eventType: "BOUNCE",
+        metadata: {},
+        bounceType: "TEMPORARY_FAILURE",
+        recruiterStatus: "Failed"
+      })
+    ).toBe("TEMPORARY_FAILURE");
+    expect(
+      resolveActivityExportBounceType({
+        eventType: "BOUNCE",
+        metadata: {},
+        bounceType: null,
+        recruiterStatus: "INVALID_ADDRESS"
+      })
+    ).toBe("INVALID_ADDRESS");
   });
 });

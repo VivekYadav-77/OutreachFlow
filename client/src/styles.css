@@ -2322,7 +2322,7 @@ th {
   border-radius: 8px;
   display: grid;
   gap: 10px;
-  grid-template-columns: repeat(5, minmax(140px, 1fr)) auto;
+  grid-template-columns: repeat(4, minmax(140px, 1fr)) auto;
   margin-bottom: 14px;
   padding: 12px;
 }
@@ -2405,6 +2405,59 @@ th {
   display: flex;
   gap: 10px;
   justify-content: flex-end;
+}
+
+.activity-export-modal {
+  max-width: 520px;
+}
+
+.activity-export-body {
+  gap: 18px;
+}
+
+.activity-export-mode {
+  color: var(--text-muted-darker);
+  display: grid;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 6px;
+  text-transform: uppercase;
+}
+
+.activity-export-mode select {
+  min-height: 40px;
+}
+
+.activity-export-summary {
+  background: var(--bg-body);
+  border: 1px solid var(--border-lighter);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.activity-export-summary > span {
+  color: var(--text-muted-darker);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.activity-export-summary div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.activity-export-summary strong {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-lighter);
+  border-radius: 999px;
+  color: var(--text-main);
+  font-size: 12px;
+  font-weight: 650;
+  padding: 6px 10px;
 }
 
 .recruiter-activity-modal {
