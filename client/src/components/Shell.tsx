@@ -33,7 +33,7 @@ export function Shell() {
   return (
     <div className="app">
       <aside className="sidebar">
-        <div className="brand">Gmail Outreach</div>
+        <div className="brand">Outreach Flow</div>
         <ThemeSwitcher />
         <nav>
           {nav.map((item) => {

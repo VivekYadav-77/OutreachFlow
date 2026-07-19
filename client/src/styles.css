@@ -1235,7 +1235,11 @@ th {
 .dark .composer-editor-content [style*="color:#0000ff" i],
 .dark .composer-editor-content [style*="color: #0000ff" i],
 .dark .composer-editor-content [style*="color: rgb(0, 0, 255)" i],
-.dark .composer-editor-content [style*="color: rgb(0,0,255)" i] {
+.dark .composer-editor-content [style*="color: rgb(0,0,255)" i],
+.dark .composer-editor-content [style*="color:#0" i],
+.dark .composer-editor-content [style*="color: #0" i],
+.dark .composer-editor-content [style*="color:rgb(0," i],
+.dark .composer-editor-content [style*="color: rgb(0," i] {
   color: var(--primary-dark) !important;
 }
 

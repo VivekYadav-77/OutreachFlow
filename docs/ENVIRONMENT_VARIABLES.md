@@ -1,6 +1,6 @@
 # Environment Variables Reference
 
-> This document explains every environment variable used by EmailSender, what it controls, whether it is required, and how to set it correctly.
+> This document explains every environment variable used by Outreach Flow, what it controls, whether it is required, and how to set it correctly.
 
 ---
 

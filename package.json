@@ -1,8 +1,8 @@
 {
-  "name": "email-sender-local",
+  "name": "outreach-flow",
   "version": "1.0.0",
   "private": true,
-  "description": "Local Gmail outreach automation system using Gmail API and OAuth 2.0.",
+  "description": "Outreach Flow local Gmail outreach automation system using Gmail API and OAuth 2.0.",
   "scripts": {
     "dev": "concurrently \"npm:dev --workspace server\" \"npm:dev --workspace client\"",
     "build": "npm run build --workspace server && npm run build --workspace client",

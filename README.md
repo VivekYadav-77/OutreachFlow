@@ -1,7 +1,7 @@
-# 📬 EmailSender — Local Gmail Outreach Automation
+# 📬 Outreach Flow
 
 <p align="center">
-  <img src="./client/public/favicon.svg" width="128" alt="EmailSender Logo" />
+  <img src="./client/public/favicon.svg" width="128" alt="Outreach Flow Logo" />
 </p>
 
 > A production-minded, single-user local application for legitimate personalized email outreach through the **official Gmail API**. Manage recruiter contacts, compose rich-text emails, run automated sending campaigns, and generate AI-powered cover letters — all from your own machine, using your own Gmail account.
@@ -35,7 +35,7 @@
 
 ## 1. What is this?
 
-**EmailSender** is a self-hosted web application that runs entirely on your own computer. It acts as a personal email campaign manager — you connect it to your Gmail account once, and it can send personalized outreach emails on your behalf through Google's official API.
+**Outreach Flow** is a self-hosted web application that runs entirely on your own computer. It acts as a personal email campaign manager — you connect it to your Gmail account once, and it can send personalized outreach emails on your behalf through Google's official API.
 
 Think of it as a lightweight, privacy-first alternative to tools like Mailchimp or Hunter.io — but designed for personal use, running locally, and using only your own Gmail account. No data is ever sent to a third-party email service.
 
@@ -143,7 +143,7 @@ Think of it as a lightweight, privacy-first alternative to tools like Mailchimp 
 ## 5. Folder Structure
 
 ```
-EmailSender/
+Outreach Flow/
 ├── .env.example              # Environment variable template → copy to server/.env
 ├── .gitignore                # Git ignore rules
 ├── package.json              # Root workspace config (npm workspaces)
@@ -258,8 +258,8 @@ You need a Google account (Gmail) to connect the app. You will also need to crea
 Open a terminal (Command Prompt, PowerShell, or Terminal) and run:
 
 ```bash
-git clone https://github.com/your-username/EmailSender.git
-cd EmailSender
+git clone https://github.com/your-username/outreach-flow.git
+cd outreach-flow
 ```
 
 > **Don't have a GitHub URL?** If you received the project as a ZIP file, extract it and open a terminal in the extracted folder.
@@ -746,7 +746,7 @@ A: Yes — OAuth 2.0 does not use your password at all. 2FA does not affect the 
 Contributions are welcome! Here's how to get started:
 
 1. **Fork** the repository on GitHub.
-2. **Clone** your fork: `git clone https://github.com/YOUR_USERNAME/EmailSender.git`
+2. **Clone** your fork: `git clone https://github.com/YOUR_USERNAME/outreach-flow.git`
 3. **Create a branch** for your change: `git checkout -b feature/my-new-feature`
 4. **Make your changes** and test them locally.
 5. **Run the tests**: `npm test`

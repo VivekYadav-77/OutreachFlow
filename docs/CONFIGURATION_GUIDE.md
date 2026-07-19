@@ -1,6 +1,6 @@
 # Configuration Guide
 
-> **Who is this for?** Anyone setting up EmailSender for the first time. This guide explains every external service the project depends on — what it is, why we need it, and exactly how to get your credentials, step by step.
+> **Who is this for?** Anyone setting up Outreach Flow for the first time. This guide explains every external service the project depends on — what it is, why we need it, and exactly how to get your credentials, step by step.
 
 ---
 
@@ -18,11 +18,11 @@
 
 PostgreSQL (often called "Postgres") is a free, open-source database management system. Think of it like a very powerful, organized spreadsheet that runs as a background process on your computer. It stores data in tables with rows and columns, and applications talk to it using a language called SQL.
 
-**Plain English:** It's the filing cabinet where EmailSender keeps all your contacts, emails, settings, logs, and send history.
+**Plain English:** It's the filing cabinet where Outreach Flow keeps all your contacts, emails, settings, logs, and send history.
 
 ### Why does this project need it?
 
-EmailSender needs a place to permanently store:
+Outreach Flow needs a place to permanently store:
 - Your recruiter/contact list
 - Email drafts, templates, and campaign configs
 - The email send queue (what to send next)
@@ -122,7 +122,7 @@ DATABASE_URL=postgres://postgres:yourcredentials@localhost:5432/email_sender
 
 ### Running migrations
 
-Migrations create the database tables that EmailSender needs. Run this **once** after creating the database:
+Migrations create the database tables that Outreach Flow needs. Run this **once** after creating the database:
 
 ```bash
 npm run db:migrate
@@ -173,7 +173,7 @@ OAuth 2.0 is a security standard that lets you grant an application access to yo
 
 ### Why does this project need it?
 
-EmailSender sends emails directly through the Gmail API using your Gmail account. This is the official, secure, supported way to send Gmail — no passwords, no browser automation, no third-party SMTP servers.
+Outreach Flow sends emails directly through the Gmail API using your Gmail account. This is the official, secure, supported way to send Gmail — no passwords, no browser automation, no third-party SMTP servers.
 
 The credentials you create (`GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`) identify your application to Google. The OAuth flow connects your specific Gmail account to the app and stores a refresh token in the database.
 
@@ -189,7 +189,7 @@ The credentials you create (`GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`) ident
 2. Sign in with any Google account (it doesn't have to be the Gmail you'll use for sending).
 3. At the top of the page, click the **project selector dropdown** (it might say "Select a project" or show an existing project name).
 4. Click **"New Project"**.
-5. Enter a project name, for example: `EmailSender`.
+5. Enter a project name, for example: `Outreach Flow`.
 6. Click **"Create"**.
 7. Wait a few seconds, then select the new project from the dropdown.
 
@@ -213,7 +213,7 @@ Before creating credentials, you must set up the "consent screen" — the page u
 2. Choose **"External"** (this means any Google account can authorize it, not just accounts in a Google Workspace organization).
 3. Click **"Create"**.
 4. Fill in the required fields:
-   - **App name:** `EmailSender` (or any name you like)
+   - **App name:** `Outreach Flow` (or any name you like)
    - **User support email:** your email address
    - **Developer contact information:** your email address
 5. Click **"Save and Continue"** through the **Scopes** and **Test users** sections — you don't need to change anything there.
@@ -229,7 +229,7 @@ Before creating credentials, you must set up the "consent screen" — the page u
 2. Click **"+ Create Credentials"** at the top.
 3. Select **"OAuth client ID"**.
 4. For **Application type**, select **"Web application"**.
-5. Give it a name: `EmailSender Local`.
+5. Give it a name: `Outreach Flow Local`.
 6. Under **"Authorized redirect URIs"**, click **"+ Add URI"** and enter exactly:
    ```
    http://localhost:4000/api/auth/callback
@@ -265,7 +265,7 @@ GOOGLE_REDIRECT_URI=http://localhost:4000/api/auth/callback
 4. In the **"Google Account"** section, click **"Connect Google Account"**
 5. You'll be redirected to Google's login page
 6. Select the Gmail account you want to send from
-7. If you see **"This app isn't verified"** — click **"Advanced"** → **"Go to EmailSender (unsafe)"**. This is normal for personal projects.
+7. If you see **"This app isn't verified"** — click **"Advanced"** → **"Go to Outreach Flow (unsafe)"**. This is normal for personal projects.
 8. Click **"Allow"** to grant the Gmail send permission
 9. You'll be redirected back to Settings, and it should now show **"Connected"** with your email address
 
@@ -276,7 +276,7 @@ GOOGLE_REDIRECT_URI=http://localhost:4000/api/auth/callback
 | Gmail API not enabled | `Gmail API has not been used in project...` | Go to APIs & Services → Library → enable Gmail API |
 | Wrong redirect URI | `redirect_uri_mismatch` error | The URI in Google Console must be exactly `http://localhost:4000/api/auth/callback` |
 | App not in "External" mode | Can't sign in with your Google account | Set OAuth consent screen to "External" |
-| Test user not added | `Access blocked: EmailSender has not completed the Google verification process` | Add your Gmail to the Test users list in OAuth consent screen settings |
+| Test user not added | `Access blocked: Outreach Flow has not completed the Google verification process` | Add your Gmail to the Test users list in OAuth consent screen settings |
 | Credentials copied incorrectly | `invalid_client` error | Re-copy Client ID and Secret from Google Console — no extra spaces |
 | Not restarting the server | Old config loaded | Always restart the backend (`Ctrl+C` then `npm run dev`) after changing `server/.env` |
 
