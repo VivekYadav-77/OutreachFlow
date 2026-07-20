@@ -2,13 +2,38 @@ import React from "react";
 
 export const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
 
+type ApiErrorPayload = {
+  message?: string;
+  details?: {
+    formErrors?: string[];
+    fieldErrors?: Record<string, string[] | undefined>;
+  };
+};
+
+function humanizeFieldName(field: string) {
+  return field
+    .replace(/\./g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/^./, (char) => char.toUpperCase());
+}
+
+function formatApiError(error?: ApiErrorPayload) {
+  const formErrors = error?.details?.formErrors?.filter(Boolean) ?? [];
+  const fieldErrors = Object.entries(error?.details?.fieldErrors ?? {})
+    .flatMap(([field, messages]) => (messages ?? []).filter(Boolean).map((message) => `${humanizeFieldName(field)}: ${message}`));
+  const validationMessages = [...fieldErrors, ...formErrors];
+
+  if (validationMessages.length > 0) return validationMessages.join(" ");
+  return error?.message ?? "Request failed";
+}
+
 export async function api<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     headers: options?.body instanceof FormData ? undefined : { "Content-Type": "application/json" },
     ...options
   });
   const json = await response.json().catch(() => ({}));
-  if (!response.ok || json.ok === false) throw new Error(json.error?.message ?? "Request failed");
+  if (!response.ok || json.ok === false) throw new Error(formatApiError(json.error));
   return json.data as T;
 }
 

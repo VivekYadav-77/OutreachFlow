@@ -65,7 +65,7 @@ const SETTING_METADATA: Record<string, {
     presets: ["08:00", "09:00", "10:00"],
     inputType: "time",
     validate: (val, form) => {
-      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(val)) return "Invalid time format (HH:MM)";
+      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(val)) return "Enter a valid time from 00:00 to 23:59";
       const endTime = String(form.endTime ?? "");
       if (/^([01]\d|2[0-3]):[0-5]\d$/.test(endTime) && timeToMinutes(val) >= timeToMinutes(endTime)) {
         return `Start time must be before End time (${endTime})`;
@@ -80,7 +80,7 @@ const SETTING_METADATA: Record<string, {
     presets: ["17:00", "18:00", "19:00"],
     inputType: "time",
     validate: (val, form) => {
-      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(val)) return "Invalid time format (HH:MM)";
+      if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(val)) return "Enter a valid time from 00:00 to 23:59";
       const startTime = String(form.startTime ?? "");
       if (/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime) && timeToMinutes(startTime) >= timeToMinutes(val)) {
         return `End time must be after Start time (${startTime})`;
@@ -420,6 +420,15 @@ export function SettingsPage() {
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+
+    for (const key of Object.keys(FORMATTED_LABELS)) {
+      const value = String(form[key] ?? "");
+      const validationError = SETTING_METADATA[key]?.validate?.(value, form);
+      if (validationError) {
+        toast.error(`Validation Error: ${FORMATTED_LABELS[key]} - ${validationError}`);
+        return;
+      }
+    }
 
     // Final safety validations
     const minDelay = Number(form.minDelaySeconds);
