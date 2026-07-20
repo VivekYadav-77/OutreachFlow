@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "../database/db.js";
 import { dailyStats, recruiters } from "../database/schema.js";
 import { getComposedEmailWithAttachments, markDraftFailed, markDraftSending, markDraftSent } from "../services/draftService.js";
@@ -83,21 +83,34 @@ async function getTodayStats() {
   const date = todayKey();
   const [existing] = await db.select().from(dailyStats).where(eq(dailyStats.date, date));
   if (existing) return existing;
-  const [created] = await db.insert(dailyStats).values({ date }).returning();
-  return created;
+  
+  await db.insert(dailyStats).values({ date }).onConflictDoNothing({ target: dailyStats.date });
+  const [stats] = await db.select().from(dailyStats).where(eq(dailyStats.date, date));
+  return stats;
 }
 
 async function incrementStats(success: boolean, sendTimeMs: number) {
   const stats = await getTodayStats();
-  await db
-    .update(dailyStats)
-    .set({
-      sentCount: success ? stats.sentCount + 1 : stats.sentCount,
-      failedCount: success ? stats.failedCount : stats.failedCount + 1,
-      totalSendTimeMs: stats.totalSendTimeMs + sendTimeMs,
-      updatedAt: new Date()
-    })
-    .where(eq(dailyStats.id, stats.id));
+  if (success) {
+    await db
+      .update(dailyStats)
+      .set({
+        totalSendTimeMs: sql`${dailyStats.totalSendTimeMs} + ${sendTimeMs}`,
+        updatedAt: new Date()
+      })
+      .where(eq(dailyStats.id, stats.id));
+  } else {
+    // If failed, release the claimed sentCount and increment failedCount
+    await db
+      .update(dailyStats)
+      .set({
+        sentCount: sql`${dailyStats.sentCount} - 1`,
+        failedCount: sql`${dailyStats.failedCount} + 1`,
+        totalSendTimeMs: sql`${dailyStats.totalSendTimeMs} + ${sendTimeMs}`,
+        updatedAt: new Date()
+      })
+      .where(eq(dailyStats.id, stats.id));
+  }
 }
 
 class EmailWorker {
@@ -139,7 +152,14 @@ class EmailWorker {
       }
 
       const stats = await getTodayStats();
-      if (stats.sentCount >= settings.dailyLimit) {
+      // Try to atomically claim a send slot
+      const [claimed] = await db
+        .update(dailyStats)
+        .set({ sentCount: sql`${dailyStats.sentCount} + 1`, updatedAt: new Date() })
+        .where(and(eq(dailyStats.id, stats.id), sql`${dailyStats.sentCount} < ${settings.dailyLimit}`))
+        .returning();
+
+      if (!claimed) {
         await createLog({ event: "worker.daily_limit", message: "Daily sending limit reached" });
         await sleep(15 * 60_000);
         continue;
@@ -214,12 +234,16 @@ class EmailWorker {
           const detail = getNetworkErrorDetail(error);
           if (job.draftId) await markDraftFailed(job.draftId, `Network error: ${detail}`);
           await pauseQueueForNetworkFailure(job.id, detail);
+          // Release the claimed slot since network failed before send could complete properly
+          await incrementStats(false, Date.now() - started);
           this.running = false;
           break;
         }
 
         if (error instanceof AuthRequiredError) {
           await pauseSendingForAuthFailure(String(error.details && typeof error.details === "object" && "reason" in error.details ? error.details.reason : message), job.id);
+          // Release the claimed slot since auth failed
+          await incrementStats(false, Date.now() - started);
           this.running = false;
           await setWorkerStatus("paused");
           break;

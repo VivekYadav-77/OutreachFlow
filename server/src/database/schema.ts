@@ -246,7 +246,9 @@ export const dailyStats = pgTable("daily_stats", {
   totalSendTimeMs: integer("total_send_time_ms").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
-});
+}, (table) => ({
+  dateUnique: uniqueIndex("daily_stats_date_unique").on(table.date)
+}));
 
 export const emailActivity = pgTable(
   "email_activity",

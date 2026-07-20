@@ -43,6 +43,13 @@
       "when": 1784505600000,
       "tag": "0005_email_activity_monitoring",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784571153366,
+      "tag": "0006_add_unique_index",
+      "breakpoints": true
     }
   ]
 }

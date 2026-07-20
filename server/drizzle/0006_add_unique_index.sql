@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX IF NOT EXISTS "daily_stats_date_unique" ON "daily_stats" USING btree ("date");
