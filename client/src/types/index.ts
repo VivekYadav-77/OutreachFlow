@@ -49,7 +49,7 @@ export type Stats = {
   averageSendTimeMs: number;
   remainingRecruiters: number;
   estimatedCompletionDate: string | null;
-  workerStatus: string;
+  workerStatus: "running" | "paused" | "stopped" | "completed" | "completed_with_failures" | string;
   authStatus?: AuthStatus;
   queue: Record<string, number>;
   queueItems?: QueueItem[];

@@ -15,7 +15,7 @@ export const settingsSchema = z
     retryCount: z.coerce.number().int().min(0).max(10).optional(),
     retryIntervalsMinutes: z.array(z.coerce.number().int().min(1)).optional(),
     attachmentEnabled: z.coerce.boolean().optional(),
-    workerStatus: z.enum(["stopped", "running", "paused"]).optional()
+    workerStatus: z.enum(["stopped", "running", "paused", "completed", "completed_with_failures"]).optional()
   })
   .superRefine((value, ctx) => {
     if (value.minDelaySeconds && value.maxDelaySeconds && value.minDelaySeconds > value.maxDelaySeconds) {
@@ -73,7 +73,7 @@ export async function updateSettings(input: z.infer<typeof settingsSchema>) {
   return updated;
 }
 
-export async function setWorkerStatus(workerStatus: "stopped" | "running" | "paused") {
+export async function setWorkerStatus(workerStatus: "stopped" | "running" | "paused" | "completed" | "completed_with_failures") {
   const current = await getSettings();
   const [updated] = await db.update(settings).set({ workerStatus, updatedAt: new Date() }).where(eq(settings.id, current.id)).returning();
   return updated;

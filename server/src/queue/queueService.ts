@@ -323,3 +323,46 @@ export async function retryFailedJobs(input: RetryFailedJobsInput) {
   }
   return { queued: result.length };
 }
+
+export async function isQueueFullyProcessed() {
+  const [{ value: activeCount }] = await db
+    .select({ value: count() })
+    .from(emailQueue)
+    .where(inArray(emailQueue.state, ["Pending", "Sending", "Retrying"]));
+  const [{ value: failedCount }] = await db
+    .select({ value: count() })
+    .from(emailQueue)
+    .where(eq(emailQueue.state, "Failed"));
+  return { isDone: activeCount === 0, failedCount };
+}
+
+export async function pauseQueueForNetworkFailure(failedJobId: number, errorMessage: string) {
+  const now = new Date();
+
+  // Revert the job that just failed back to Pending without consuming a retry attempt
+  await db
+    .update(emailQueue)
+    .set({
+      state: "Pending",
+      lastError: `Network error: ${errorMessage}`,
+      updatedAt: now
+    })
+    .where(eq(emailQueue.id, failedJobId));
+
+  // Pause all other Pending jobs so the worker doesn't try them
+  const pausedJobs = await db
+    .update(emailQueue)
+    .set({ state: "Paused", lastError: "Paused: internet disconnected", updatedAt: now })
+    .where(eq(emailQueue.state, "Pending"))
+    .returning({ id: emailQueue.id });
+
+  await setWorkerStatus("paused");
+  await createLog({
+    level: "warn",
+    event: "worker.paused_network",
+    message: `Worker auto-paused: internet connectivity lost (${errorMessage})`,
+    metadata: { pausedJobs: pausedJobs.length, failedJobId, errorMessage }
+  });
+
+  return { pausedJobs: pausedJobs.length };
+}

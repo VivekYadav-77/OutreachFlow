@@ -2,6 +2,7 @@ import React from "react";
 import {
   AlertTriangle,
   Check,
+  CheckCircle,
   Clock,
   Inbox,
   List,
@@ -11,6 +12,7 @@ import {
   Search,
   Send,
   Trash2,
+  WifiOff,
   XCircle
 } from "lucide-react";
 import { API_URL, api, useApi } from "../api/client";
@@ -86,7 +88,7 @@ const QUEUE_ACTIONS = [
 type QueueActionPath =
   | typeof QUEUE_ACTIONS[number]["path"]
   | "/api/recruiters/bulk/deletable";
-type WorkerStatus = "running" | "paused" | "stopped" | "unknown";
+type WorkerStatus = "running" | "paused" | "stopped" | "completed" | "completed_with_failures" | "unknown";
 
 function formatLastUpdated(date: Date | null) {
   if (!date) return "Waiting for update";
@@ -94,7 +96,7 @@ function formatLastUpdated(date: Date | null) {
 }
 
 function normalizeWorkerStatus(status: string | undefined): WorkerStatus {
-  if (status === "running" || status === "paused" || status === "stopped") return status;
+  if (status === "running" || status === "paused" || status === "stopped" || status === "completed" || status === "completed_with_failures") return status;
   return "unknown";
 }
 
@@ -109,6 +111,7 @@ export function Dashboard() {
   const [retryAttempts, setRetryAttempts] = React.useState(3);
   const [autoRefreshEnabled, setAutoRefreshEnabled] = React.useState(true);
   const [lastUpdatedAt, setLastUpdatedAt] = React.useState<Date | null>(null);
+  const completionPromptedRef = React.useRef(false);
   const toast = useToast();
 
   const [searchQuery, setSearchQuery] = React.useState("");
@@ -144,6 +147,19 @@ export function Dashboard() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [autoRefreshEnabled]);
+
+  // Auto-open retry modal when all emails are processed and some failed
+  React.useEffect(() => {
+    const status = normalizeWorkerStatus(data?.workerStatus);
+    if (status === "completed_with_failures" && !completionPromptedRef.current && !showRetryFailedModal) {
+      completionPromptedRef.current = true;
+      void openRetryFailedModal();
+    }
+    // Reset the prompt flag when worker starts running again
+    if (status === "running") {
+      completionPromptedRef.current = false;
+    }
+  }, [data?.workerStatus]);
 
   const refreshDashboard = () => {
     setRefresh((value) => value + 1);
@@ -355,6 +371,47 @@ export function Dashboard() {
             <span>{authStatus.lastAuthFailureReason ?? "Your Google authorization has expired, been revoked, or is no longer valid."}</span>
           </div>
           <a className="button" href={`${API_URL}/api/auth/google`}>Reconnect Google</a>
+        </div>
+      )}
+      {workerStatus === "paused" && failedCount === 0 && pendingCount === 0 && pausedCount > 0 && (
+        <div className="auth-required-banner" style={{ borderColor: 'var(--warning-border, #b8860b)', background: 'var(--warning-bg, rgba(255, 165, 0, 0.08))' }}>
+          <WifiOff size={22} />
+          <div className="auth-required-content">
+            <strong>Worker Paused — Internet Disconnected</strong>
+            <span>The worker was automatically paused because internet connectivity was lost. Check your connection and click Resume to continue sending.</span>
+          </div>
+          <button
+            className="button"
+            disabled={actionLoading !== null}
+            onClick={() => void action("/api/queue/resume", "Worker resumed")}
+          >
+            Resume
+          </button>
+        </div>
+      )}
+      {workerStatus === "completed" && (
+        <div className="auth-required-banner" style={{ borderColor: 'var(--success-border, #2e7d32)', background: 'var(--success-bg, rgba(46, 125, 50, 0.08))' }}>
+          <CheckCircle size={22} style={{ color: 'var(--success-text, #4caf50)' }} />
+          <div className="auth-required-content">
+            <strong>Queue Complete</strong>
+            <span>All emails have been sent successfully.</span>
+          </div>
+        </div>
+      )}
+      {workerStatus === "completed_with_failures" && (
+        <div className="auth-required-banner" style={{ borderColor: 'var(--warning-border, #b8860b)', background: 'var(--warning-bg, rgba(255, 165, 0, 0.08))' }}>
+          <AlertTriangle size={22} style={{ color: 'var(--warning-text, #ff9800)' }} />
+          <div className="auth-required-content">
+            <strong>Queue Complete — Some Emails Failed</strong>
+            <span>{failedCount} email{failedCount === 1 ? '' : 's'} failed to send. Use the retry dialog to select which ones to try again.</span>
+          </div>
+          <button
+            className="button"
+            disabled={actionLoading !== null}
+            onClick={() => void openRetryFailedModal()}
+          >
+            Review &amp; Retry
+          </button>
         </div>
       )}
       <div className="stats-grid">

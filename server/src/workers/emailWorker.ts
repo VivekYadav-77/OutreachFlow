@@ -6,7 +6,7 @@ import { emailService } from "../services/emailService.js";
 import { createLog } from "../services/logService.js";
 import { getSettings, setWorkerStatus } from "../services/settingsService.js";
 import { getGoogleConnectionStatus, pauseSendingForAuthFailure } from "../services/oauthConnectionService.js";
-import { getRandomDelaySeconds, markJobFailed, markJobSent, pickNextJob, scheduleRetry } from "../queue/queueService.js";
+import { getRandomDelaySeconds, isQueueFullyProcessed, markJobFailed, markJobSent, pauseQueueForNetworkFailure, pickNextJob, scheduleRetry } from "../queue/queueService.js";
 import { AuthRequiredError } from "../utils/errors.js";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -19,6 +19,64 @@ function isWithinWorkingHours(startTime: string, endTime: string) {
   const now = new Date();
   const current = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
   return current >= startTime && current <= endTime;
+}
+
+/** Known network-level error codes that indicate internet connectivity loss */
+const NETWORK_ERROR_CODES = new Set([
+  "ENOTFOUND",
+  "ENETUNREACH",
+  "ENETDOWN",
+  "ECONNREFUSED",
+  "ECONNRESET",
+  "ECONNABORTED",
+  "ETIMEDOUT",
+  "EAI_AGAIN",
+  "EHOSTUNREACH",
+  "EPIPE",
+  "ERR_NETWORK"
+]);
+
+/** Check if an error is a network connectivity failure (not a server/API error) */
+function isNetworkError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+
+  const err = error as Record<string, unknown>;
+
+  // Check error.code (Node.js network errors)
+  if (typeof err.code === "string" && NETWORK_ERROR_CODES.has(err.code)) return true;
+
+  // Check nested error.cause.code (e.g. fetch wraps network errors)
+  if (err.cause && typeof err.cause === "object") {
+    const cause = err.cause as Record<string, unknown>;
+    if (typeof cause.code === "string" && NETWORK_ERROR_CODES.has(cause.code)) return true;
+  }
+
+  // Check error message for common network failure strings
+  const message = (err.message ?? "").toString().toLowerCase();
+  if (
+    message.includes("fetch failed") ||
+    message.includes("network error") ||
+    message.includes("dns resolution failed") ||
+    message.includes("getaddrinfo") ||
+    message.includes("unable to connect") ||
+    message.includes("socket hang up")
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/** Extract a human-readable network error code or message */
+function getNetworkErrorDetail(error: unknown): string {
+  if (!error || typeof error !== "object") return "Unknown network error";
+  const err = error as Record<string, unknown>;
+  if (typeof err.code === "string" && NETWORK_ERROR_CODES.has(err.code)) return err.code;
+  if (err.cause && typeof err.cause === "object") {
+    const cause = err.cause as Record<string, unknown>;
+    if (typeof cause.code === "string" && NETWORK_ERROR_CODES.has(cause.code)) return cause.code;
+  }
+  return err instanceof Error ? err.message : "Unknown network error";
 }
 
 async function getTodayStats() {
@@ -102,6 +160,26 @@ class EmailWorker {
 
       const job = await pickNextJob();
       if (!job) {
+        // Check if the queue is fully processed (no active jobs remaining)
+        const { isDone, failedCount } = await isQueueFullyProcessed();
+        if (isDone) {
+          this.running = false;
+          if (failedCount > 0) {
+            await setWorkerStatus("completed_with_failures");
+            await createLog({
+              event: "worker.completed_with_failures",
+              message: `Queue processing complete. ${failedCount} email(s) failed and can be retried.`,
+              metadata: { failedCount }
+            });
+          } else {
+            await setWorkerStatus("completed");
+            await createLog({
+              event: "worker.completed",
+              message: "Queue processing complete. All emails sent successfully."
+            });
+          }
+          break;
+        }
         await sleep(30_000);
         continue;
       }
@@ -130,6 +208,16 @@ class EmailWorker {
         await createLog({ event: "email.sent", message: logMessage, recruiterId, queueId: job.id, metadata: job.draftId ? { draftId: job.draftId } : {} });
       } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown Gmail send failure";
+
+        // Network connectivity failure — auto-pause to preserve queue integrity
+        if (isNetworkError(error)) {
+          const detail = getNetworkErrorDetail(error);
+          if (job.draftId) await markDraftFailed(job.draftId, `Network error: ${detail}`);
+          await pauseQueueForNetworkFailure(job.id, detail);
+          this.running = false;
+          break;
+        }
+
         if (error instanceof AuthRequiredError) {
           await pauseSendingForAuthFailure(String(error.details && typeof error.details === "object" && "reason" in error.details ? error.details.reason : message), job.id);
           this.running = false;
