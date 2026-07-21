@@ -113,6 +113,16 @@ async function incrementStats(success: boolean, sendTimeMs: number) {
   }
 }
 
+async function releaseClaimedSlot(statsId: number) {
+  await db
+    .update(dailyStats)
+    .set({
+      sentCount: sql`${dailyStats.sentCount} - 1`,
+      updatedAt: new Date()
+    })
+    .where(eq(dailyStats.id, statsId));
+}
+
 class EmailWorker {
   private running = false;
 
@@ -151,6 +161,19 @@ class EmailWorker {
         continue;
       }
 
+      const authStatus = await getGoogleConnectionStatus();
+      if (authStatus.status !== "CONNECTED") {
+        this.running = false;
+        await setWorkerStatus("paused");
+        await createLog({
+          level: authStatus.status === "AUTH_REQUIRED" ? "warn" : "error",
+          event: "worker.stopped_auth",
+          message: "Worker stopped because Google authorization is required",
+          metadata: { oauthStatus: authStatus.status }
+        });
+        break;
+      }
+
       const stats = await getTodayStats();
       // Try to atomically claim a send slot
       const [claimed] = await db
@@ -165,21 +188,11 @@ class EmailWorker {
         continue;
       }
 
-      const authStatus = await getGoogleConnectionStatus();
-      if (authStatus.status !== "CONNECTED") {
-        this.running = false;
-        await setWorkerStatus("paused");
-        await createLog({
-          level: authStatus.status === "AUTH_REQUIRED" ? "warn" : "error",
-          event: "worker.stopped_auth",
-          message: "Worker stopped because Google authorization is required",
-          metadata: { oauthStatus: authStatus.status }
-        });
-        break;
-      }
-
       const job = await pickNextJob();
       if (!job) {
+        // We claimed a slot but didn't find a job. Rollback the slot.
+        await releaseClaimedSlot(stats.id);
+        
         // Check if the queue is fully processed (no active jobs remaining)
         const { isDone, failedCount } = await isQueueFullyProcessed();
         if (isDone) {
