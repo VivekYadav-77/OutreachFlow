@@ -51,6 +51,7 @@ export async function getStatistics() {
   return {
     dailyLimit: settings.dailyLimit,
     todayLimitReached: (today?.sentCount ?? 0) >= settings.dailyLimit,
+    autoResumeOnNewDay: settings.autoResumeOnNewDay,
     todaySent: today?.sentCount ?? 0,
     totalSent,
     pending,

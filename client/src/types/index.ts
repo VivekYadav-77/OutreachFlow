@@ -53,6 +53,7 @@ export type Stats = {
   authStatus?: AuthStatus;
   dailyLimit: number;
   todayLimitReached: boolean;
+  autoResumeOnNewDay: boolean;
   queue: Record<string, number>;
   queueItems?: QueueItem[];
 };

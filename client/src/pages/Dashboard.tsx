@@ -414,7 +414,7 @@ export function Dashboard() {
           </button>
         </div>
       )}
-      {workerStatus === "running" && data?.todayLimitReached && (
+      {data?.todayLimitReached && (workerStatus === "running" || workerStatus === "paused") && data?.autoResumeOnNewDay && (
         <div className="auth-required-banner" style={{ borderColor: 'var(--info-border, #0288d1)', background: 'var(--info-bg, rgba(2, 136, 209, 0.08))' }}>
           <Clock size={22} style={{ color: 'var(--info-text, #03a9f4)' }} />
           <div className="auth-required-content">
@@ -423,20 +423,22 @@ export function Dashboard() {
           </div>
         </div>
       )}
-      {workerStatus === "paused" && data?.todayLimitReached && (
+      {data?.todayLimitReached && (workerStatus === "running" || workerStatus === "paused") && data?.autoResumeOnNewDay === false && (
         <div className="auth-required-banner" style={{ borderColor: 'var(--warning-border, #b8860b)', background: 'var(--warning-bg, rgba(255, 165, 0, 0.08))' }}>
           <Pause size={22} style={{ color: 'var(--warning-text, #ff9800)' }} />
           <div className="auth-required-content">
-            <strong>Today's Limit Reached — Worker Paused</strong>
-            <span>The worker sent all {data.dailyLimit} emails for today and has stopped. Come back tomorrow and click Resume to continue your campaign.</span>
+            <strong>Today's Limit Reached — Worker Will Stop</strong>
+            <span>The worker has sent all {data.dailyLimit} emails for today. It is set to fully stop once the current cycle ends. Come back tomorrow and click Resume.</span>
           </div>
-          <button
-            className="button"
-            disabled={actionLoading !== null}
-            onClick={() => void action("/api/queue/resume", "Worker resumed")}
-          >
-            Resume
-          </button>
+          {workerStatus === "paused" && (
+            <button
+              className="button"
+              disabled={actionLoading !== null}
+              onClick={() => void action("/api/queue/resume", "Worker resumed")}
+            >
+              Resume
+            </button>
+          )}
         </div>
       )}
       <div className="stats-grid">
