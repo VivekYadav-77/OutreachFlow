@@ -15,6 +15,7 @@ export const settingsSchema = z
     retryCount: z.coerce.number().int().min(0).max(10).optional(),
     retryIntervalsMinutes: z.array(z.coerce.number().int().min(1)).optional(),
     attachmentEnabled: z.coerce.boolean().optional(),
+    autoResumeOnNewDay: z.coerce.boolean().optional(),
     workerStatus: z.enum(["stopped", "running", "paused", "completed", "completed_with_failures"]).optional()
   })
   .superRefine((value, ctx) => {

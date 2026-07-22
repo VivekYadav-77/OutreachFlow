@@ -183,9 +183,16 @@ class EmailWorker {
         .returning();
 
       if (!claimed) {
-        await createLog({ event: "worker.daily_limit", message: "Daily sending limit reached" });
-        await sleep(15 * 60_000);
-        continue;
+        if (settings.autoResumeOnNewDay) {
+          await createLog({ event: "worker.daily_limit", message: "Daily limit reached. Sleeping until next day." });
+          await sleep(15 * 60_000);
+          continue;
+        } else {
+          await setWorkerStatus("paused");
+          await createLog({ event: "worker.daily_limit_paused", message: "Daily limit reached. Worker paused. Manual resume required." });
+          this.running = false;
+          break;
+        }
       }
 
       const job = await pickNextJob();

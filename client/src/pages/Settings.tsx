@@ -1,5 +1,5 @@
 import React from "react";
-import { AlertTriangle, SlidersHorizontal, X, XCircle } from "lucide-react";
+import { AlertTriangle, Info, SlidersHorizontal, X, XCircle } from "lucide-react";
 import { API_URL, api, useApi } from "../api/client";
 import { Page } from "../components/Page";
 import { GoogleAuthStatus } from "../components/GoogleAuthStatus";
@@ -391,12 +391,60 @@ function SafeSendingGuidelinesModal({ isOpen, onClose, settings }: { isOpen: boo
   );
 }
 
+function DailyLimitBehaviorInfoModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  React.useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    if (isOpen) {
+      window.addEventListener('keydown', handleEsc);
+    }
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '550px' }}>
+        <div className="modal-header">
+          <h2>Daily Limit Behavior</h2>
+          <button className="modal-close" onClick={onClose}><X size={24} /></button>
+        </div>
+        <div className="modal-body" style={{ padding: '20px' }}>
+          <p className="note-text" style={{ marginBottom: '16px' }}>
+            This setting controls what happens when your queue reaches the <strong>Daily Email Limit</strong>.
+          </p>
+          <div style={{ marginBottom: '16px' }}>
+            <strong>Sleep &amp; Auto-Resume Tomorrow</strong>
+            <p className="note-text" style={{ marginTop: '4px' }}>
+              The worker remains "running" but goes to sleep for the rest of the day. At midnight, it will automatically wake up and continue sending. This is the recommended setting for continuous, multi-day campaigns.
+            </p>
+          </div>
+          <div>
+            <strong>Stop — Require Manual Resume</strong>
+            <p className="note-text" style={{ marginTop: '4px' }}>
+              The worker completely halts once the limit is reached. To continue sending the next day, you must manually log in and click "Resume" on the dashboard. Use this if you are warming up a new account and want to carefully monitor daily sends.
+            </p>
+          </div>
+          <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end' }}>
+            <button type="button" className="button" onClick={onClose}>
+              Got it
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function SettingsPage() {
   const [refresh, setRefresh] = React.useState(0);
   const { data } = useApi<Record<string, unknown>>("/api/settings", refresh);
   const { data: authStatus } = useApi<AuthStatus>("/api/auth/status", refresh);
   const [form, setForm] = React.useState<Record<string, unknown>>({});
   const [isGuidelinesOpen, setIsGuidelinesOpen] = React.useState(false);
+  const [isBehaviorInfoOpen, setIsBehaviorInfoOpen] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
   const toast = useToast();
   const [modalState, setModalState] = React.useState<{ isOpen: boolean; key: string; value: string }>({
@@ -413,7 +461,8 @@ export function SettingsPage() {
         maxDelaySeconds: String(data.maxDelaySeconds ?? 150),
         startTime: String(data.startTime ?? "09:00"),
         endTime: String(data.endTime ?? "18:00"),
-        retryCount: String(data.retryCount ?? 4)
+        retryCount: String(data.retryCount ?? 4),
+        autoResumeOnNewDay: Boolean(data.autoResumeOnNewDay ?? true)
       });
     }
   }, [data]);
@@ -508,6 +557,7 @@ export function SettingsPage() {
   return (
     <Page title="Campaign Settings" actions={<GoogleAuthStatus />}>
       <SafeSendingGuidelinesModal isOpen={isGuidelinesOpen} onClose={() => setIsGuidelinesOpen(false)} settings={data} />
+      <DailyLimitBehaviorInfoModal isOpen={isBehaviorInfoOpen} onClose={() => setIsBehaviorInfoOpen(false)} />
 
       {modalState.isOpen && (
         <SettingOptionModal
@@ -599,7 +649,55 @@ export function SettingsPage() {
             ))}
           </div>
 
-          <button style={{ marginTop: '16px' }} disabled={isSaving}>
+          <div style={{ marginTop: '24px', borderTop: '1px solid var(--border-color)', paddingTop: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+              <h3 style={{ margin: 0, fontSize: '15px' }}>When Daily Email Limit is Reached</h3>
+              <button 
+                type="button" 
+                style={{ padding: '4px', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }} 
+                onClick={() => setIsBehaviorInfoOpen(true)}
+                title="Learn more about this setting"
+              >
+                <Info size={16} />
+              </button>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <label className={`preset-card ${form.autoResumeOnNewDay ? 'active' : ''}`} style={{ textAlign: 'left', padding: '16px', cursor: 'pointer', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                <input 
+                  type="radio" 
+                  name="autoResume"
+                  checked={!!form.autoResumeOnNewDay}
+                  onChange={() => setForm(prev => ({ ...prev, autoResumeOnNewDay: true }))}
+                  style={{ marginTop: '4px' }}
+                />
+                <div>
+                  <strong>Sleep &amp; Auto-Resume Tomorrow (Recommended)</strong>
+                  <div className="note-text" style={{ marginTop: '4px', fontSize: '13px' }}>
+                    The worker pauses sending for today, stays active, and automatically resumes at the next check after midnight.
+                  </div>
+                </div>
+              </label>
+
+              <label className={`preset-card ${!form.autoResumeOnNewDay ? 'active' : ''}`} style={{ textAlign: 'left', padding: '16px', cursor: 'pointer', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                <input 
+                  type="radio" 
+                  name="autoResume"
+                  checked={!form.autoResumeOnNewDay}
+                  onChange={() => setForm(prev => ({ ...prev, autoResumeOnNewDay: false }))}
+                  style={{ marginTop: '4px' }}
+                />
+                <div>
+                  <strong>Stop — Require Manual Resume</strong>
+                  <div className="note-text" style={{ marginTop: '4px', fontSize: '13px' }}>
+                    The worker fully stops when today's limit is hit. You must click Resume on the Dashboard tomorrow to continue.
+                  </div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <button style={{ marginTop: '24px' }} disabled={isSaving}>
             {isSaving && <Spinner size={14} />}
             Save Settings
           </button>

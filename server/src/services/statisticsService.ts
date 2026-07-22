@@ -49,6 +49,8 @@ export async function getStatistics() {
     .limit(500);
 
   return {
+    dailyLimit: settings.dailyLimit,
+    todayLimitReached: (today?.sentCount ?? 0) >= settings.dailyLimit,
     todaySent: today?.sentCount ?? 0,
     totalSent,
     pending,

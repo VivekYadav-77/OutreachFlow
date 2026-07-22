@@ -51,6 +51,8 @@ export type Stats = {
   estimatedCompletionDate: string | null;
   workerStatus: "running" | "paused" | "stopped" | "completed" | "completed_with_failures" | string;
   authStatus?: AuthStatus;
+  dailyLimit: number;
+  todayLimitReached: boolean;
   queue: Record<string, number>;
   queueItems?: QueueItem[];
 };

@@ -206,6 +206,7 @@ export const settings = pgTable("settings", {
   retryIntervalsMinutes: jsonb("retry_intervals_minutes").$type<number[]>().notNull().default([5, 15, 30, 60]),
   attachmentEnabled: boolean("attachment_enabled").notNull().default(false),
   workerStatus: text("worker_status").notNull().default("stopped"),
+  autoResumeOnNewDay: boolean("auto_resume_on_new_day").notNull().default(true),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
 });
 

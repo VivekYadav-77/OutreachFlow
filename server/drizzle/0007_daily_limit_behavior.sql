@@ -1,0 +1,1 @@
+ALTER TABLE "settings" ADD COLUMN "auto_resume_on_new_day" boolean NOT NULL DEFAULT true;
